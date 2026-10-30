@@ -57,7 +57,8 @@ namespace
         {"Buildings", "RenderDroneRails", ConfigValueType::Boolean, "true",
          "Render Drone Rails: display drone rail splines when the building layer is shown."},
         {"Buildings", "CaptureSprites", ConfigValueType::Boolean, "true",
-         "Capture Building Sprites: render sprites for buildings missing from the cache; when off, those stay hidden."},
+         "Capture Building Sprites: render sprites for buildings missing from the cache; buildings skipped while off "
+         "stay hidden until the next world load."},
         {"Fog Of War", "DisableFog", ConfigValueType::Boolean, "false",
          "Disable Fog of War: bypass MiniMap visual fog and fog-based marker hiding; native exploration is unchanged."},
         {"Fog Of War", "FeatherRange", ConfigValueType::Float, "55.0",

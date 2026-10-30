@@ -2117,7 +2117,8 @@ namespace MiniMapBuildingSpriteRenderer
         (void)deltaTime;
         if (!g_fifo || !g_feedback || !g_sessionActive || !MiniMapMap::GameplayReady() ||
             g_nativeWorld.Phase == WorldPhase::Quarantined) return;
-        if (!g_activeRequest && g_nativeWorld.Phase != WorldPhase::Ready && !g_fifo->HasPending()) return;
+        const bool captureSprites = MiniMapConfig::GetRenderSettings().Buildings.CaptureSprites;
+        if (!g_activeRequest && g_nativeWorld.Phase != WorldPhase::Ready && (!captureSprites || !g_fifo->HasPending())) return;
         // CPU-only idle proof under the caller's LifecycleMutex. Every request
         // Job/callable/retirement/undelivered feedback keeps g_activeRequest alive.
         // Pending lighting has its own fence and must continue through service;
@@ -2127,7 +2128,7 @@ namespace MiniMapBuildingSpriteRenderer
         if (!g_activeRequest && g_nativeWorld.Phase == WorldPhase::Ready &&
             g_nativeWorld.Rig == NativeWorldOwner::RigPhase::Ready &&
             g_nativeWorld.LightFence.GetState() == MiniMapCaptureRetirement::FenceState::Destroyed &&
-            !g_fifo->HasPending()) return;
+            (!captureSprites || !g_fifo->HasPending())) return;
         if (!GameThread())
         {
             if (g_activeRequest || !g_nativeWorld.CanStartSession())
@@ -2190,7 +2191,7 @@ namespace MiniMapBuildingSpriteRenderer
         }
         catch (...) { g_nativeWorld.LightFailure("shared lighting initialization/service exception"); return; }
         // Capture switched off: in-flight work above still retires, nothing new is admitted.
-        if (!MiniMapConfig::GetRenderSettings().Buildings.CaptureSprites) return;
+        if (!captureSprites) return;
         try
         {
             static_assert(std::is_nothrow_move_assignable_v<std::string>);
