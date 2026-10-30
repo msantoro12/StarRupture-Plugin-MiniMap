@@ -22,6 +22,7 @@
 #include <Windows.h>
 
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <cstring>
 #include <limits>
@@ -2075,6 +2076,12 @@ namespace
     constexpr unsigned kWorldCreationAttempts = 3;
     constexpr unsigned kWorldRetryTicks = 120;
     unsigned g_worldCreationAttempts = 0, g_worldRetryTicks = 0;
+    // Large bases queue many classes at once. Let a freshly loaded world settle
+    // before the first capture, then leave a gap after every finished request.
+    using Clock = std::chrono::steady_clock;
+    constexpr auto kSessionSettleDelay = std::chrono::seconds(5);
+    constexpr auto kCaptureGap = std::chrono::milliseconds(500);
+    Clock::time_point g_nextAdmission{};
 
     // Caller holds LifecycleMutex; only this game-thread path can write cache
     // files or submit feedback. Session end closes publication under that lock.
@@ -2090,6 +2097,7 @@ namespace
         if (g_sessionActive && request.Complete(*g_feedback))
         {
             g_activeRequest.reset(); // World remains owned and ready for the next request.
+            g_nextAdmission = Clock::now() + kCaptureGap;
         }
     }
 }
@@ -2108,6 +2116,7 @@ namespace MiniMapBuildingSpriteRenderer
     {
         if (!g_fifo || !g_feedback || g_sessionActive || g_activeRequest || !g_nativeWorld.CanStartSession()) return false;
         g_worldCreationAttempts = g_worldRetryTicks = 0;
+        g_nextAdmission = Clock::now() + kSessionSettleDelay;
         g_sessionActive = true;
         return true;
     }
@@ -2147,6 +2156,7 @@ namespace MiniMapBuildingSpriteRenderer
         // Retirement and undelivered feedback take priority. Even if this clears
         // the request, admission waits until the next service iteration.
         if (g_activeRequest) { ServiceActiveRequest(); return; }
+        if (Clock::now() < g_nextAdmission) return; // Settle delay or capture gap.
         if (g_nativeWorld.Phase != WorldPhase::Ready)
         {
             if (!g_nativeWorld.CanStartSession())
