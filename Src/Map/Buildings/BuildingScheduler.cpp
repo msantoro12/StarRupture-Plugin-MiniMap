@@ -8,6 +8,7 @@
 #include "plugin_helpers.h"
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <limits>
 #include <optional>
 #include <string>
@@ -39,6 +40,14 @@ namespace
         size_t Count = 0;
     };
     Names g_pass, g_completed;
+    // Every atlas publication re-uploads the whole texture, and captures finish
+    // one at a time. Hold captured payloads in the handoff until a batch fills
+    // or the interval since the last batch elapses. Disk discoveries never wait.
+    using Clock = std::chrono::steady_clock;
+    constexpr size_t CapturedSpritesPerBatch = 8;
+    constexpr auto CapturedSpriteBatchInterval = std::chrono::seconds(4);
+    static_assert(CapturedSpritesPerBatch < MaximumBatchNames);
+    Clock::time_point g_lastBatch{};
     struct RetentionRetry
     {
         std::string Path;
@@ -155,7 +164,7 @@ namespace MiniMapBuildingScheduler
         Clear(g_pass); Clear(g_completed); g_passOpen = false;
         for (const auto blueprint : BlacklistedBlueprints)
             g_statuses->try_emplace(std::string(blueprint), S::Location::Failed);
-        ++g_serial; g_serviceTick = 0; g_backpressureReported = false;
+        ++g_serial; g_serviceTick = 0; g_lastBatch = {}; g_backpressureReported = false;
         g_discoveryAllocationReported = g_invalidFeedbackReported = g_invalidHandoffReported = false;
         // Do not reset serviceBusy: a canceled unlocked service may still own
         // CPU work from the prior session. Its guard will release the reservation.
@@ -249,19 +258,25 @@ namespace MiniMapBuildingScheduler
         Names names;
         RetentionRetries retries;
         uint64_t serial, tick;
+        bool hold;
         {
             std::lock_guard<std::mutex> lock(MiniMapBuildingSchedulerInternal::LifecycleMutex);
             if (!Admitted(g_serial) || g_serviceBusy) return;
             g_serviceBusy = true; serial = g_serial;
             if (g_serviceTick != (std::numeric_limits<uint64_t>::max)()) ++g_serviceTick;
             tick = g_serviceTick;
-            names.Count = g_completed.Count;
+            const auto now = Clock::now();
+            const auto payloads = g_completed.Payloads.begin();
+            hold = g_completed.Count < CapturedSpritesPerBatch && now - g_lastBatch < CapturedSpriteBatchInterval &&
+                std::all_of(payloads, payloads + g_completed.Count, [](const auto& payload) { return payload != nullptr; });
+            names.Count = hold ? 0 : g_completed.Count;
+            if (names.Count) g_lastBatch = now;
             for (size_t i = 0; i < names.Count; ++i)
             {
                 names.Paths[i] = std::move(g_completed.Paths[i]);
                 names.Payloads[i] = std::move(g_completed.Payloads[i]);
             }
-            g_completed.Count = 0;
+            g_completed.Count -= names.Count; // All or none: a held batch stays in the handoff.
             for (size_t i = 0; i < g_retentionRetries.size(); ++i)
                 if (g_retentionRetries[i] && g_retentionRetries[i]->NextTick <= tick)
                 {
@@ -365,7 +380,7 @@ namespace MiniMapBuildingScheduler
             // timer or a wait for future identities/captures. Bound total work by
             // the existing handoff capacity; overflow remains owned by g_completed.
             std::lock_guard<std::mutex> lock(MiniMapBuildingSchedulerInternal::LifecycleMutex);
-            if (!Admitted(serial) || servicedNames >= MaximumBatchNames || !g_completed.Count) break;
+            if (hold || !Admitted(serial) || servicedNames >= MaximumBatchNames || !g_completed.Count) break;
             names.Count = (std::min)(g_completed.Count, MaximumBatchNames - servicedNames);
             for (size_t i = 0; i < names.Count; ++i)
             {
