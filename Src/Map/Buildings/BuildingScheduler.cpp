@@ -42,7 +42,8 @@ namespace
     Names g_pass, g_completed;
     // Every atlas publication re-uploads the whole texture, and captures finish
     // one at a time. Hold captured payloads in the handoff until a batch fills
-    // or the interval since the last batch elapses. Disk discoveries never wait.
+    // or the interval since the last batch elapses. Disk discoveries never wait
+    // for a batch.
     using Clock = std::chrono::steady_clock;
     constexpr size_t CapturedSpritesPerBatch = 8;
     constexpr auto CapturedSpriteBatchInterval = std::chrono::seconds(4);
@@ -377,8 +378,9 @@ namespace MiniMapBuildingScheduler
             // EndDraw may have closed more discoveries while TryLoad ran unlocked.
             // Take those already available names into the SAME CPU/GPU batch. The
             // empty handoff observation below is the publication boundary, not a
-            // timer or a wait for future identities/captures. Bound total work by
-            // the existing handoff capacity; overflow remains owned by g_completed.
+            // timer or a wait for future identities; the capture hold above is the
+            // only timer. Bound total work by the existing handoff capacity;
+            // overflow remains owned by g_completed.
             std::lock_guard<std::mutex> lock(MiniMapBuildingSchedulerInternal::LifecycleMutex);
             if (hold || !Admitted(serial) || servicedNames >= MaximumBatchNames || !g_completed.Count) break;
             names.Count = (std::min)(g_completed.Count, MaximumBatchNames - servicedNames);

@@ -2118,7 +2118,8 @@ namespace
             nearest.reserve(64);
             for (const auto& record : snapshot->Records)
             {
-                if (record.HasSpline || !record.TransformValid || !record.CanonicalBlueprint) continue;
+                if (record.Generation != snapshot->Generation || record.HasSpline || !record.TransformValid ||
+                        !record.CanonicalBlueprint) continue;
                 const double dx = record.Position[0] - sample.Tracking.WorldX, dy = record.Position[1] - sample.Tracking.WorldY;
                 const double distance = dx * dx + dy * dy;
                 const auto [it, added] = nearest.try_emplace(*record.CanonicalBlueprint, distance);
@@ -2245,6 +2246,7 @@ namespace MiniMapBuildingSpriteRenderer
             // SpriteFifo moves a std::string then pops it without allocation;
             // allocation/lock failure precedes removal. No native request began.
             g_activeRequest.reset();
+            g_nextAdmission = Clock::now() + kCaptureGap; // Retry paced, not every tick.
             LOG_WARN("MiniMap: building capture FIFO admission unavailable; queued work retained");
             return;
         }
