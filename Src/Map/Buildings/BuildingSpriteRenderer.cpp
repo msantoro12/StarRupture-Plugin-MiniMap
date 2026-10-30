@@ -21,6 +21,7 @@
 #include <SDK/MassReplication_classes.hpp>
 #include <Windows.h>
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cmath>
@@ -28,7 +29,9 @@
 #include <limits>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <type_traits>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -2100,6 +2103,34 @@ namespace
             g_nextAdmission = Clock::now() + kCaptureGap;
         }
     }
+
+    // Game-thread admission only. Takes the queued class whose nearest collected
+    // instance is closest to the map's tracked pose; classes with no collected
+    // instance follow in queue order. Each admission removes one class and a
+    // class is queued at most once per session, so none can wait forever.
+    bool RemoveNearest(std::string& blueprintPath)
+    {
+        const auto snapshot = MiniMapBuildingCollector::GetSnapshot();
+        std::unordered_map<std::string_view, double> nearest; // Views into snapshot.
+        MiniMapMap::PresentationSample sample{};
+        if (snapshot && MiniMapMap::TryGetPresentationSample(sample))
+        {
+            nearest.reserve(64);
+            for (const auto& record : snapshot->Records)
+            {
+                if (record.HasSpline || !record.TransformValid || !record.CanonicalBlueprint) continue;
+                const double dx = record.Position[0] - sample.Tracking.WorldX, dy = record.Position[1] - sample.Tracking.WorldY;
+                const double distance = dx * dx + dy * dy;
+                const auto [it, added] = nearest.try_emplace(*record.CanonicalBlueprint, distance);
+                if (!added) it->second = (std::min)(it->second, distance);
+            }
+        }
+        return g_fifo->RemoveLowest(blueprintPath, [&](const std::string& path)
+        {
+            const auto it = nearest.find(path);
+            return it == nearest.end() ? std::numeric_limits<double>::infinity() : it->second;
+        });
+    }
 }
 
 namespace MiniMapBuildingSpriteRenderer
@@ -2206,7 +2237,7 @@ namespace MiniMapBuildingSpriteRenderer
         {
             static_assert(std::is_nothrow_move_assignable_v<std::string>);
             g_activeRequest.emplace(); // Allocate the private slot BEFORE removing a FIFO entry.
-            if (!g_fifo->Remove(g_activeRequest->BlueprintPath))
+            if (!RemoveNearest(g_activeRequest->BlueprintPath))
             { g_activeRequest.reset(); return; }
         }
         catch (...)
