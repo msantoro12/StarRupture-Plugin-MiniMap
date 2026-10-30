@@ -3,6 +3,7 @@
 #include "Map/Buildings/BuildingSpriteRenderer.h"
 #include "Map/Buildings/BuildingScheduler.h"
 #include "Map/Buildings/BuildingCache.h"
+#include "Config/Config.h"
 #include "Map/Map.h"
 #include "Map/MapTransform.h"
 #include "Native/NativeApi.h"
@@ -2188,6 +2189,8 @@ namespace MiniMapBuildingSpriteRenderer
             if (!g_nativeWorld.ServiceLighting()) return; // Registration fence completes before FIFO admission.
         }
         catch (...) { g_nativeWorld.LightFailure("shared lighting initialization/service exception"); return; }
+        // Capture switched off: in-flight work above still retires, nothing new is admitted.
+        if (!MiniMapConfig::GetRenderSettings().Buildings.CaptureSprites) return;
         try
         {
             static_assert(std::is_nothrow_move_assignable_v<std::string>);

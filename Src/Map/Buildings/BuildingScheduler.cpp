@@ -3,6 +3,7 @@
 #include "BuildingScheduler.h"
 #include "BuildingAtlas.h"
 #include "BuildingCache.h"
+#include "Config/Config.h"
 #include "Map/Map.h"
 #include "plugin_helpers.h"
 #include <algorithm>
@@ -288,6 +289,7 @@ namespace MiniMapBuildingScheduler
             }
             RetainDecoded(batch, retry->Path, retry->Sprite, serial, tick, retry->Attempts + 1, std::move(retry->Payload));
         }
+        const bool captureSprites = MiniMapConfig::GetRenderSettings().Buildings.CaptureSprites;
         size_t servicedNames = 0;
 #if MINIMAP_DEVELOPMENT_DIAGNOSTICS
         size_t loadedSprites = 0, missingSprites = 0, directSprites = 0;
@@ -336,6 +338,7 @@ namespace MiniMapBuildingScheduler
 #if MINIMAP_DEVELOPMENT_DIAGNOSTICS
                         ++missingSprites;
 #endif
+                        if (!captureSprites) { it->second.Where = S::Location::Failed; continue; }
                         try { g_fifo->Add(path); it->second.Where = S::Location::Queued; }
                         catch (...) { it->second.Where = S::Location::Failed; SpriteDiagnostic("MiniMap: capture FIFO allocation failed for '%s'; failed for session", path.c_str()); }
                         continue;
