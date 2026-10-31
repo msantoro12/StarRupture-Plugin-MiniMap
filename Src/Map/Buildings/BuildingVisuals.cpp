@@ -620,6 +620,9 @@ namespace
     {
         const auto& plan=pending.Plan;auto& list=*pending.List;
         if(!plan || !plan->Binding.Snapshot)return true;
+#if MINIMAP_DEVELOPMENT_DIAGNOSTICS
+        list.PlanTriangles=plan->Triangles;list.PlanInsetTriangles=plan->WalkwayInsetTriangles;
+#endif
         const double tolerance=pending.Scale>0?0.5/pending.Scale:0; // Half a pixel, in world units.
         const auto& records=plan->Binding.Snapshot->Records;
         const auto& sources=plan->Binding.Splines;
@@ -690,7 +693,7 @@ namespace
                 if(spent())return;
             }
             if(!FlattenSplines(pending,spent))return;
-            RetirePlan(g_plan);
+            if(pending.Plan!=g_plan)RetirePlan(g_plan); // A new zoom keeps the plan.
             g_plan=std::move(pending.Plan);g_planScale=pending.Scale;
             std::shared_ptr<const SplineDrawList> splines=std::move(pending.List);
 #if MINIMAP_DEVELOPMENT_DIAGNOSTICS
