@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cmath>
 #include <cstddef>
@@ -69,7 +70,7 @@ namespace
 
     std::mutex g_snapshotMutex;
     uint64_t g_worldGeneration = 0;
-    double g_acquisitionRadius = 0.0;
+    std::atomic<double> g_acquisitionRadius = 0.0; // Set from the render callback, which must not wait.
     std::vector<AlienRecord> g_records;
 
     void ResetPollReporting()
@@ -434,7 +435,6 @@ namespace MiniMapAlienActors
             radius = 0.5 * std::hypot(transform.Width, transform.Height) /
                 transform.PixelsPerWorldUnit + kMovementMarginWorldUnits;
         }
-        std::scoped_lock lock(g_snapshotMutex);
         g_acquisitionRadius = std::isfinite(radius) ? radius : 0.0;
     }
 

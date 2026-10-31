@@ -170,11 +170,16 @@ namespace
     // snapshot this thread pinned before) stands in for this call.
     void RefreshSnapshot(std::shared_ptr<const Snapshot>& last)
     {
-        std::unique_lock<std::mutex> lock(g_snapshotMutex, std::try_to_lock);
-        if (lock.owns_lock())
+        std::shared_ptr<const Snapshot> current;
         {
-            last = g_snapshot;
+            std::unique_lock<std::mutex> lock(g_snapshotMutex, std::try_to_lock);
+            if (!lock.owns_lock())
+            {
+                return;
+            }
+            current = g_snapshot;
         }
+        last.swap(current); // The replaced one is released outside the lock.
     }
 
     void PublishSnapshot(std::shared_ptr<const Snapshot> next)
