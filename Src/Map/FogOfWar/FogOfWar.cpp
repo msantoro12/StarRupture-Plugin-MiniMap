@@ -21,6 +21,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <memory>
+#include <mutex>
 #include <utility>
 #include <vector>
 
@@ -149,7 +151,61 @@ namespace
     float g_snapshotAccumulator =
         0.0f;
 
-    Snapshot g_snapshot = {};
+    /*
+     * The mask copy is published whole and never edited afterwards. The game
+     * thread replaces it; the render thread pins the one it started with.
+     */
+    std::mutex g_snapshotMutex;
+    std::shared_ptr<const Snapshot> g_snapshot;
+
+    thread_local const Snapshot* t_pinnedSnapshot = nullptr;
+
+    std::shared_ptr<const Snapshot> CurrentSnapshot()
+    {
+        std::lock_guard<std::mutex> lock(g_snapshotMutex);
+        return g_snapshot;
+    }
+
+    void PublishSnapshot(std::shared_ptr<const Snapshot> next)
+    {
+        {
+            std::lock_guard<std::mutex> lock(g_snapshotMutex);
+            g_snapshot.swap(next);
+        }
+        // The replaced copy is released here, outside the lock.
+    }
+
+    // Keeps one published snapshot for the calls made on this thread while it lives.
+    class PinnedSnapshot
+    {
+    public:
+        PinnedSnapshot() :
+            m_previous(t_pinnedSnapshot)
+        {
+            if (m_previous == nullptr)
+            {
+                m_held = CurrentSnapshot();
+                t_pinnedSnapshot = m_held.get();
+            }
+        }
+
+        ~PinnedSnapshot()
+        {
+            t_pinnedSnapshot = m_previous;
+        }
+
+        PinnedSnapshot(const PinnedSnapshot&) = delete;
+        PinnedSnapshot& operator=(const PinnedSnapshot&) = delete;
+
+        bool Valid() const
+        {
+            return t_pinnedSnapshot != nullptr && t_pinnedSnapshot->Valid;
+        }
+
+    private:
+        const Snapshot* m_previous;
+        std::shared_ptr<const Snapshot> m_held;
+    };
 
     /*
      * Use one immutable 1x1 opaque-black image for all FOW geometry.
@@ -248,7 +304,7 @@ namespace
 
     void ClearSnapshot()
     {
-        g_snapshot = {};
+        PublishSnapshot(nullptr);
         g_invalidStateReported =
             false;
 #if MINIMAP_DEVELOPMENT_DIAGNOSTICS
@@ -399,7 +455,10 @@ namespace
     {
         outValue = 0;
 
-        if (!g_snapshot.Valid ||
+        const Snapshot* const snapshot = t_pinnedSnapshot;
+
+        if (snapshot == nullptr ||
+            !snapshot->Valid ||
             maskX < 0 ||
             maskY < 0 ||
             maskX >= kLogicalMaskSize ||
@@ -437,7 +496,7 @@ namespace
             localX;
 
         const auto& segment =
-            g_snapshot.Segments[
+            snapshot->Segments[
                 static_cast<std::size_t>(
                     segmentIndex)];
 
@@ -970,7 +1029,9 @@ namespace
         outMaskY = -1;
         outSegmentIndex = -1;
 
-        if (!g_snapshot.Valid)
+        const PinnedSnapshot pinned;
+
+        if (!pinned.Valid())
         {
             return false;
         }
@@ -1094,10 +1155,14 @@ namespace
 
         (void)player;
 
-        if (g_snapshot.Component !=
+        auto current = CurrentSnapshot();
+
+        if (current != nullptr &&
+            current->Component !=
             component)
         {
             ClearSnapshot();
+            current = nullptr;
         }
 
         Snapshot nextSnapshot = {};
@@ -1123,18 +1188,20 @@ namespace
         g_invalidStateReported =
             false;
 
-        if (!g_snapshot.Valid)
+        if (current == nullptr ||
+            !current->Valid)
         {
-            g_snapshot =
-                std::move(
-                    nextSnapshot);
+            PublishSnapshot(
+                std::make_shared<const Snapshot>(
+                    std::move(
+                        nextSnapshot)));
 
 #if MINIMAP_DEVELOPMENT_DIAGNOSTICS
             LOG_INFO(
                 "MiniMap: FOW diagnostic: "
                 "snapshot ready component=%p "
                 "segments=%d bytes-per-segment=%d total=%d",
-                g_snapshot.Component,
+                component,
                 kSegmentCount,
                 kSegmentByteCount,
                 kSegmentCount *
@@ -1156,11 +1223,11 @@ namespace
 
         for (std::size_t segmentIndex = 0;
             segmentIndex <
-                g_snapshot.Segments.size();
+                current->Segments.size();
             ++segmentIndex)
         {
             const auto& previous =
-                g_snapshot.Segments[
+                current->Segments[
                     segmentIndex];
 
             const auto& current =
@@ -1195,9 +1262,10 @@ namespace
         }
 
 #endif
-        g_snapshot =
-            std::move(
-                nextSnapshot);
+        PublishSnapshot(
+            std::make_shared<const Snapshot>(
+                std::move(
+                    nextSnapshot)));
 
 #if MINIMAP_DEVELOPMENT_DIAGNOSTICS
         if (changedSegments >
@@ -1303,7 +1371,9 @@ namespace MiniMapFogOfWar
         double worldX,
         double worldY)
     {
-        if (!g_snapshot.Valid ||
+        const PinnedSnapshot pinned;
+
+        if (!pinned.Valid() ||
             !std::isfinite(worldX) ||
             !std::isfinite(worldY))
         {
@@ -1333,7 +1403,8 @@ namespace MiniMapFogOfWar
 
     bool IsNativeWorldRectangleRevealed(double minX,double minY,double maxX,double maxY)
     {
-        return g_snapshot.Valid&&MiniMapFogCoverage::Revealed(minX,minY,maxX,maxY,kMapPivotX,kMapPivotY,kWorldToMaskScale,kLogicalMaskSize,64,
+        const PinnedSnapshot pinned;
+        return pinned.Valid()&&MiniMapFogCoverage::Revealed(minX,minY,maxX,maxY,kMapPivotX,kMapPivotY,kWorldToMaskScale,kLogicalMaskSize,64,
             [](int x,int y){uint8_t value=0;return TryGetMaskByte(x,y,value)&&value==255;});
     }
 
@@ -1342,7 +1413,8 @@ namespace MiniMapFogOfWar
         const MiniMapConfig::FogOfWarSettings& fog)
     {
         if (fog.Disabled) return false;
-        if(!g_snapshot.Valid||!g_blackFogTexture||!transform.Valid||
+        const PinnedSnapshot pinned;
+        if(!pinned.Valid()||!g_blackFogTexture||!transform.Valid||
             !std::isfinite(transform.PixelsPerWorldUnit)||transform.PixelsPerWorldUnit<=0||
             !std::isfinite(transform.LocalVisibilityWorldX)||!std::isfinite(transform.LocalVisibilityWorldY))return false;
         // At most 64 cells / 576 copied-mask reads. This stronger-than-necessary
@@ -1367,7 +1439,8 @@ namespace MiniMapFogOfWar
             return 0.0f;
         }
         if (fog.Disabled) return 1.0f;
-        if (!g_snapshot.Valid) return 0.0f;
+        const PinnedSnapshot pinned;
+        if (!pinned.Valid()) return 0.0f;
         return static_cast<float>(std::clamp(
             1.0 - RenderedFogAlpha(worldX, worldY, transform, fog), 0.0, 1.0));
     }
@@ -1380,9 +1453,11 @@ namespace MiniMapFogOfWar
     {
         if (fog.Disabled) return;
 
+        const PinnedSnapshot pinned;
+
         if (ui == nullptr ||
             !transform.Valid ||
-            !g_snapshot.Valid ||
+            !pinned.Valid() ||
             transform.PixelsPerWorldUnit <=
                 0.0)
         {
