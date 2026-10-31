@@ -665,12 +665,13 @@ namespace
         }
         catch(...){} // Without room to defer them, they are freed with the plan.
     }
-    // Game thread. Until the deadline: frees retired sections, then advances
+    // Game thread. For kSplinePreparationBudget: frees retired sections, then advances
     // the pending plan and its draw list, and publishes the list once it is
     // complete. A change that arrives meanwhile is picked up by the next
     // pending plan, so there is never more than one.
-    void PrepareSplines(const std::shared_ptr<const Snapshot>& snapshot,Clock::time_point deadline)
+    void PrepareSplines(const std::shared_ptr<const Snapshot>& snapshot)
     {
+        const auto deadline=Clock::now()+kSplinePreparationBudget;
         const auto spent=[&]{return Clock::now()>=deadline;};
         while(!g_retiredSections.empty() && !spent())g_retiredSections.pop_back();
         const double scale=g_drawScale.load(std::memory_order_relaxed);
@@ -723,7 +724,6 @@ namespace
         if(!MiniMapMap::GameplayReady())return;
         const auto settings=MiniMapConfig::GetRenderSettings().Buildings;
         if(!settings.ShowLayer)return;
-        const auto deadline=Clock::now()+kSplinePreparationBudget;
         const auto input=C::GetSnapshot();
         if(!input) { if(g_lastInput) Clear(); return; }
         if(input->Generation!=g_generation) { Clear(); g_generation=input->Generation; }
@@ -735,7 +735,7 @@ namespace
         {
             std::shared_ptr<const Snapshot> snapshot;
             {std::scoped_lock lock(g_mutex);snapshot=g_published;}
-            if(snapshot)PrepareSplines(snapshot,deadline);
+            if(snapshot)PrepareSplines(snapshot);
         }
     }
 }
