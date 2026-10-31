@@ -826,7 +826,9 @@ namespace MiniMapBuildingVisuals
             if(lock.owns_lock()){snapshot=g_published;splines=g_splines;}
         }
         retainedSnapshot=snapshot;retainedSplines=splines;
-        const auto current=C::GetSnapshot();
+        static std::shared_ptr<const C::Snapshot> retainedCurrent; // The collector's last publication this callback read.
+        C::TryGetSnapshot(retainedCurrent);
+        const auto current=retainedCurrent;
         if(!snapshot || !current || snapshot->Generation!=current->Generation)
         {
             worldQuads={};retainedSnapshot.reset();retainedSplines.reset();retainedOrdinary.clear();retainedBaseCore.clear();
@@ -886,7 +888,7 @@ namespace MiniMapBuildingVisuals
 #endif
         uint64_t session=0,revision=0;
         MiniMapBuildingAtlas::ObservePublication(session,revision);
-        const auto currentSession = C::GetSnapshot();
+        const auto currentSession = current;
         const bool schedulerValid =
             MiniMapMap::GameplayReady() &&
             currentSession &&

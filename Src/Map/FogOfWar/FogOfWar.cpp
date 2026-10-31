@@ -166,6 +166,17 @@ namespace
         return g_snapshot;
     }
 
+    // For pins: never waits. While the game thread is publishing, `last` (the
+    // snapshot this thread pinned before) stands in for this call.
+    void RefreshSnapshot(std::shared_ptr<const Snapshot>& last)
+    {
+        std::unique_lock<std::mutex> lock(g_snapshotMutex, std::try_to_lock);
+        if (lock.owns_lock())
+        {
+            last = g_snapshot;
+        }
+    }
+
     void PublishSnapshot(std::shared_ptr<const Snapshot> next)
     {
         {
@@ -184,7 +195,9 @@ namespace
         {
             if (m_previous == nullptr)
             {
-                m_held = CurrentSnapshot();
+                thread_local std::shared_ptr<const Snapshot> last;
+                RefreshSnapshot(last);
+                m_held = last;
                 t_pinnedSnapshot = m_held.get();
             }
         }

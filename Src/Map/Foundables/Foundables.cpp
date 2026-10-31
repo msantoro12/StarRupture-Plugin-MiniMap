@@ -1237,15 +1237,31 @@ namespace MiniMapFoundables
             return;
         }
 
-        std::vector<FoundableRecord> records;
-        std::vector<ContainerDotRecord> containerDots;
+        // Render-thread copies; when the snapshot lock is busy the previous
+        // ones stand in rather than the callback waiting on the game thread.
+        static std::vector<FoundableRecord> records;
+        static std::vector<ContainerDotRecord> containerDots;
+        static uint64_t copiedWorldGeneration = 0;
 
         {
-            std::scoped_lock lock(g_snapshotMutex);
-            if (g_snapshotWorldGeneration != MiniMapMap::GetWorldGeneration()) return;
-            records = g_records;
-            containerDots = g_containerDots;
+            std::unique_lock<std::mutex> lock(g_snapshotMutex, std::try_to_lock);
+            if (lock.owns_lock())
+            {
+                if (g_snapshotWorldGeneration == MiniMapMap::GetWorldGeneration())
+                {
+                    records = g_records;
+                    containerDots = g_containerDots;
+                    copiedWorldGeneration = g_snapshotWorldGeneration;
+                }
+                else
+                {
+                    records.clear();
+                    containerDots.clear();
+                    copiedWorldGeneration = 0;
+                }
+            }
         }
+        if (copiedWorldGeneration != MiniMapMap::GetWorldGeneration()) return;
 
         PluginDrawList drawList = ui->GetWindowDrawList();
 

@@ -897,6 +897,12 @@ namespace MiniMapBuildingCollector
         std::scoped_lock lock(publicationMutex);viewRadius=std::isfinite(radius)?radius:0;
     }
     std::shared_ptr<const Snapshot> GetSnapshot(){std::scoped_lock lock(publicationMutex);return snapshot;}
+    bool TryGetSnapshot(std::shared_ptr<const Snapshot>& out)
+    {
+        std::unique_lock<std::mutex> lock(publicationMutex,std::try_to_lock);
+        if(!lock.owns_lock())return false;
+        out=snapshot;return true;
+    }
     void Shutdown()
     {
         if(!initialized)return;GetSelf()->hooks->Engine->UnregisterOnTick(&OnTick);Reset();
