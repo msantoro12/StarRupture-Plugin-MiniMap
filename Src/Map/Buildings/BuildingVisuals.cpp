@@ -116,9 +116,6 @@ namespace
         std::array<MiniMapSpriteStatus::AtlasUV,4> UV;
         std::array<G::XY,4> World;
     };
-    // Frames in a row the previous complete pass may stand in for a pass that
-    // could not take the lifecycle lock (about two seconds at 60 fps).
-    constexpr unsigned kMaxReplayFrames=120;
 #if MINIMAP_DEVELOPMENT_DIAGNOSTICS
     struct RenderWorkload
     {
@@ -816,7 +813,7 @@ namespace MiniMapBuildingVisuals
         // The sprites of the last pass that ran to its end. A pass builds its
         // own lists and swaps them in only when complete.
         static std::vector<SpriteReplay> retainedOrdinary,retainedBaseCore;
-        static unsigned replayedFrames=0;
+        static uint64_t retainedEpoch=0; // MiniMapBuildingAtlas::RetiredEpoch() when the lists were recorded.
         g_drawScale.store(transform.PixelsPerWorldUnit,std::memory_order_relaxed);
 #if MINIMAP_DEVELOPMENT_DIAGNOSTICS
         const auto elapsedMs=[](Clock::time_point begin,Clock::time_point end)
@@ -865,8 +862,10 @@ namespace MiniMapBuildingVisuals
         std::unique_lock<std::mutex> lock(MiniMapBuildingSchedulerInternal::LifecycleMutex,std::try_to_lock);
         if(!lock.owns_lock())
         {
-            // The game thread holds the lifecycle lock: keep showing the last complete set.
-            if(replayedFrames++<kMaxReplayFrames)
+            // The game thread holds the lifecycle lock: keep showing the last complete set,
+            // unless an atlas texture it drew from has been released since.
+            if(retainedEpoch!=MiniMapBuildingAtlas::RetiredEpoch()){retainedOrdinary.clear();retainedBaseCore.clear();}
+            if(MiniMapMap::GameplayReady())
             {
                 SubmitSpriteReplays(ui,dl,transform,viewport,retainedOrdinary);
                 if constexpr(MiniMapBuildingVisuals::SplineRenderingEnabled)
@@ -877,9 +876,10 @@ namespace MiniMapBuildingVisuals
             ui->DL_PopClipRect(dl);
             return;
         }
-        replayedFrames=0;
+        const uint64_t passEpoch=MiniMapBuildingAtlas::RetiredEpoch(); // Read before any draw below.
         std::vector<SpriteReplay> ordinaryPass,baseCorePass; // Published only if the pass completes.
-        ordinaryPass.reserve(retainedOrdinary.size());baseCorePass.reserve(retainedBaseCore.size());
+        try{ordinaryPass.reserve(retainedOrdinary.size());baseCorePass.reserve(retainedBaseCore.size());}
+        catch(...){} // They grow as they fill.
 #if MINIMAP_DEVELOPMENT_DIAGNOSTICS
         const auto phaseLockAcquired=Clock::now();
         lifecycleWaitMs=elapsedMs(phaseLockBegin,phaseLockAcquired);
@@ -1039,7 +1039,7 @@ namespace MiniMapBuildingVisuals
 #endif
         for(size_t index:snapshot->DrawOrder)
             if(BaseCore(snapshot->Instances[index]))submitOrdinary(index,false);
-        retainedOrdinary.swap(ordinaryPass);retainedBaseCore.swap(baseCorePass);
+        retainedOrdinary.swap(ordinaryPass);retainedBaseCore.swap(baseCorePass);retainedEpoch=passEpoch;
         }
         ui->DL_PopClipRect(dl);
 #if MINIMAP_DEVELOPMENT_DIAGNOSTICS

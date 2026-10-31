@@ -1091,11 +1091,6 @@ namespace
         if (pollMass)
         {
             massSucceeded = PollMassFoundables(settings, records, massDots);
-            if (!massSucceeded)
-            {
-                records.clear();
-                massDots.clear();
-            }
         }
         // Neither source's failure can erase the other source's completed data.
         if (!g_experienceReady || !MiniMapMap::GameplayReady() ||
@@ -1108,7 +1103,7 @@ namespace
 
         {
             std::scoped_lock lock(g_snapshotMutex);
-            if (pollMass)
+            if (pollMass && massSucceeded)
             {
                 g_records = std::move(records);
                 g_massContainerDots = std::move(massDots);
