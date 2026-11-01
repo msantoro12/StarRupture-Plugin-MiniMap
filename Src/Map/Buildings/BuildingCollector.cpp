@@ -16,6 +16,7 @@
 #include "plugin_helpers.h"
 #include <SDK/Chimera_classes.hpp>
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstring>
 #include <limits>
@@ -69,7 +70,7 @@ namespace
     Clock::time_point nextMembership{};
     std::mutex publicationMutex;
     std::shared_ptr<const Snapshot> snapshot;
-    double viewRadius=0;
+    std::atomic<double> viewRadius=0; // Set from the render callback, which must not wait.
     Bounds region;
     uint64_t atlasSession=0,atlasRevision=0;
 #if MINIMAP_DEVELOPMENT_DIAGNOSTICS
@@ -744,8 +745,7 @@ namespace
 #if MINIMAP_DEVELOPMENT_DIAGNOSTICS
             const auto gridBegin=Clock::now();
 #endif
-            MiniMapMap::PresentationSample sample{};double radius;
-            {std::scoped_lock lock(publicationMutex);radius=viewRadius;}
+            MiniMapMap::PresentationSample sample{};const double radius=viewRadius;
             const bool hasPose=radius>0 && MiniMapMap::TryGetPresentationSample(sample);
             const auto& pose=sample.Tracking;
             if(hasPose)
@@ -882,7 +882,7 @@ namespace MiniMapBuildingCollector
         if(!self || !self->hooks || !self->hooks->Engine)return false;
         Reset();InitializeMetadata();self->hooks->Engine->RegisterOnTick(&OnTick);initialized=true;return true;
     }
-    void Reset(){ready=false;ClearSession();std::scoped_lock lock(publicationMutex);viewRadius=0;}
+    void Reset(){ready=false;ClearSession();viewRadius=0;}
     void OnExperienceLoadComplete()
     {
         if(initialized)
@@ -894,9 +894,20 @@ namespace MiniMapBuildingCollector
     void SetViewport(const MiniMapMap::Transform& t)
     {
         const double radius=t.Valid && t.PixelsPerWorldUnit>0?std::hypot(t.Width,t.Height)*0.5/t.PixelsPerWorldUnit:0;
-        std::scoped_lock lock(publicationMutex);viewRadius=std::isfinite(radius)?radius:0;
+        viewRadius=std::isfinite(radius)?radius:0;
     }
     std::shared_ptr<const Snapshot> GetSnapshot(){std::scoped_lock lock(publicationMutex);return snapshot;}
+    bool TryGetSnapshot(std::shared_ptr<const Snapshot>& out)
+    {
+        std::shared_ptr<const Snapshot> current;
+        {
+            std::unique_lock<std::mutex> lock(publicationMutex,std::try_to_lock);
+            if(!lock.owns_lock())return false;
+            current=snapshot;
+        }
+        out.swap(current); // The replaced one is released outside the lock.
+        return true;
+    }
     void Shutdown()
     {
         if(!initialized)return;GetSelf()->hooks->Engine->UnregisterOnTick(&OnTick);Reset();
