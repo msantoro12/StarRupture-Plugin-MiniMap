@@ -5,6 +5,9 @@
 #include <array>
 #include <cstring>
 
+#include "SDK/Engine_classes.hpp"
+#include "plugin_map.h"
+
 // ---------------------------------------------------------------------------
 // Native pattern resolution.
 //
@@ -16,6 +19,29 @@
 // If StarRupture changes an incompatible implementation or layout, resolution
 // should fail rather than allowing MiniMap to continue with stale assumptions.
 // ---------------------------------------------------------------------------
+
+namespace
+{
+    // Every request below goes through the loader's version map first, under its
+    // hookName, and falls back to its own pattern when the map has no row for
+    // the running build. The requests are all main-module scans, which is all
+    // PluginMap::Function asks for.
+    uintptr_t ResolveMapped(
+        IPluginHookScanner* scanner,
+        IPluginSelf* self,
+        const PluginScanRequest& request)
+    {
+        return PluginMap::Function(
+            scanner,
+            self,
+            request.hookName,
+            request.pattern,
+            request.kind,
+            request.flags,
+            request.resultOffset,
+            request.followRel32At);
+    }
+}
 
 namespace MiniMapFingerprints
 {
@@ -44,8 +70,8 @@ namespace MiniMapFingerprints
             "0F 84 ?? ?? ?? ?? 80 BB 30 05 00 00 00 0F 84 ?? ?? ?? ?? "
             "48 8B 03 48 8B CB 0F B6 93 31 05 00 00 FF 90 C0 02 00 00";
         commonUIActivatedRequest.kind = PLUGIN_SCAN_FUNCTION_START;
-        addresses.commonUIWidgetNativeOnActivated = scanner->Resolve(
-            self, &commonUIActivatedRequest);
+        addresses.commonUIWidgetNativeOnActivated = ResolveMapped(scanner,
+            self, commonUIActivatedRequest);
         if (addresses.commonUIWidgetNativeOnActivated == 0)
         {
             return false;
@@ -60,8 +86,8 @@ namespace MiniMapFingerprints
             "48 89 44 24 20 33 D2 48 8D 0D ?? ?? ?? ?? E8 ?? ?? ?? ?? "
             "84 C0 0F 84 ?? ?? ?? ??";
         commonUIDeactivatedRequest.kind = PLUGIN_SCAN_FUNCTION_START;
-        addresses.commonUIWidgetNativeOnDeactivated = scanner->Resolve(
-            self, &commonUIDeactivatedRequest);
+        addresses.commonUIWidgetNativeOnDeactivated = ResolveMapped(scanner,
+            self, commonUIDeactivatedRequest);
         if (addresses.commonUIWidgetNativeOnDeactivated == 0)
         {
             return false;
@@ -108,9 +134,9 @@ namespace MiniMapFingerprints
             PLUGIN_SCAN_FUNCTION_START;
 
         const uintptr_t loadSynchronousAddress =
-            scanner->Resolve(
+            ResolveMapped(scanner,
                 self,
-                &loadSynchronousRequest);
+                loadSynchronousRequest);
 
         if (loadSynchronousAddress == 0)
         {
@@ -152,9 +178,9 @@ namespace MiniMapFingerprints
             PLUGIN_SCAN_FUNCTION_START;
 
         const uintptr_t brushTextureAddress =
-            scanner->Resolve(
+            ResolveMapped(scanner,
                 self,
-                &brushTextureRequest);
+                brushTextureRequest);
 
         if (brushTextureAddress == 0)
         {
@@ -203,9 +229,9 @@ namespace MiniMapFingerprints
             PLUGIN_SCAN_FUNCTION_START;
 
         const uintptr_t forceMipsAddress =
-            scanner->Resolve(
+            ResolveMapped(scanner,
                 self,
-                &forceMipsRequest);
+                forceMipsRequest);
 
         if (forceMipsAddress == 0)
         {
@@ -247,9 +273,9 @@ namespace MiniMapFingerprints
             PLUGIN_SCAN_FUNCTION_START;
 
         const uintptr_t waitForStreamingAddress =
-            scanner->Resolve(
+            ResolveMapped(scanner,
                 self,
-                &waitForStreamingRequest);
+                waitForStreamingRequest);
 
         if (waitForStreamingAddress == 0)
         {
@@ -292,9 +318,9 @@ namespace MiniMapFingerprints
             PLUGIN_SCAN_FUNCTION_START;
 
         const uintptr_t residentMipsAddress =
-            scanner->Resolve(
+            ResolveMapped(scanner,
                 self,
-                &residentMipsRequest);
+                residentMipsRequest);
 
         if (residentMipsAddress == 0)
         {
@@ -342,9 +368,9 @@ namespace MiniMapFingerprints
             PLUGIN_SCAN_FUNCTION_START;
 
         const uintptr_t allowedMipsAddress =
-            scanner->Resolve(
+            ResolveMapped(scanner,
                 self,
-                &allowedMipsRequest);
+                allowedMipsRequest);
 
         if (allowedMipsAddress == 0)
         {
@@ -384,9 +410,9 @@ namespace MiniMapFingerprints
             PLUGIN_SCAN_FUNCTION_START;
 
         const uintptr_t numMipsAddress =
-            scanner->Resolve(
+            ResolveMapped(scanner,
                 self,
-                &numMipsRequest);
+                numMipsRequest);
 
         if (numMipsAddress == 0)
         {
@@ -438,9 +464,9 @@ namespace MiniMapFingerprints
             PLUGIN_SCAN_FUNCTION_START;
 
         const uintptr_t streamInAddress =
-            scanner->Resolve(
+            ResolveMapped(scanner,
                 self,
-                &streamInRequest);
+                streamInRequest);
 
         if (streamInAddress == 0)
         {
@@ -489,9 +515,9 @@ namespace MiniMapFingerprints
             PLUGIN_SCAN_FUNCTION_START;
 
         const uintptr_t waitPendingAddress =
-            scanner->Resolve(
+            ResolveMapped(scanner,
                 self,
-                &waitPendingRequest);
+                waitPendingRequest);
 
         if (waitPendingAddress == 0)
         {
@@ -536,9 +562,9 @@ namespace MiniMapFingerprints
             PLUGIN_SCAN_FUNCTION_START;
 
         const uintptr_t firstControllerAddress =
-            scanner->Resolve(
+            ResolveMapped(scanner,
                 self,
-                &firstControllerRequest);
+                firstControllerRequest);
 
         if (firstControllerAddress == 0)
         {
@@ -582,9 +608,9 @@ namespace MiniMapFingerprints
             PLUGIN_SCAN_CODE;
 
         const uintptr_t componentLocationAddress =
-            scanner->Resolve(
+            ResolveMapped(scanner,
                 self,
-                &componentLocationRequest);
+                componentLocationRequest);
 
         if (componentLocationAddress == 0)
         {
@@ -647,9 +673,9 @@ namespace MiniMapFingerprints
             PLUGIN_SCAN_CODE;
 
         const uintptr_t getPlatformDataAddress =
-            scanner->Resolve(
+            ResolveMapped(scanner,
                 self,
-                &getPlatformDataRequest);
+                getPlatformDataRequest);
 
         if (getPlatformDataAddress == 0)
         {
@@ -698,9 +724,9 @@ namespace MiniMapFingerprints
             PLUGIN_SCAN_CODE;
 
         const uintptr_t getBulkDataSizeAddress =
-            scanner->Resolve(
+            ResolveMapped(scanner,
                 self,
-                &getBulkDataSizeRequest);
+                getBulkDataSizeRequest);
 
         if (getBulkDataSizeAddress == 0)
         {
@@ -749,9 +775,9 @@ namespace MiniMapFingerprints
             PLUGIN_SCAN_CODE;
 
         const uintptr_t canLoadFromDiskAddress =
-            scanner->Resolve(
+            ResolveMapped(scanner,
                 self,
-                &canLoadFromDiskRequest);
+                canLoadFromDiskRequest);
 
         if (canLoadFromDiskAddress == 0)
         {
@@ -811,9 +837,9 @@ namespace MiniMapFingerprints
             PLUGIN_SCAN_FUNCTION_START;
 
         const uintptr_t getBulkDataCopyAddress =
-            scanner->Resolve(
+            ResolveMapped(scanner,
                 self,
-                &getBulkDataCopyRequest);
+                getBulkDataCopyRequest);
 
         if (getBulkDataCopyAddress == 0)
         {
@@ -868,9 +894,9 @@ namespace MiniMapFingerprints
             PLUGIN_SCAN_FUNCTION_START;
 
         const uintptr_t memoryFreeAddress =
-            scanner->Resolve(
+            ResolveMapped(scanner,
                 self,
-                &memoryFreeRequest);
+                memoryFreeRequest);
 
         if (memoryFreeAddress == 0)
         {
@@ -933,9 +959,9 @@ namespace MiniMapFingerprints
             PLUGIN_SCAN_FUNCTION_START;
 
         const uintptr_t forgottenEngineAddress =
-            scanner->Resolve(
+            ResolveMapped(scanner,
                 self,
-                &forgottenEngineRequest);
+                forgottenEngineRequest);
 
         if (forgottenEngineAddress == 0)
         {
@@ -980,9 +1006,9 @@ namespace MiniMapFingerprints
             PLUGIN_SCAN_CODE;
 
         const uintptr_t controlRotationAddress =
-            scanner->Resolve(
+            ResolveMapped(scanner,
                 self,
-                &controlRotationRequest);
+                controlRotationRequest);
 
         if (controlRotationAddress == 0)
         {
@@ -1012,7 +1038,7 @@ namespace MiniMapFingerprints
             PLUGIN_SCAN_FUNCTION_START;
 
         const uintptr_t getAllActorsAddress =
-            scanner->Resolve(self, &getAllActorsRequest);
+            ResolveMapped(scanner,self, getAllActorsRequest);
 
         if (getAllActorsAddress == 0)
         {
@@ -1046,7 +1072,7 @@ namespace MiniMapFingerprints
             PLUGIN_SCAN_FUNCTION_START;
 
         const uintptr_t poiStaticClassAddress =
-            scanner->Resolve(self, &poiStaticClassRequest);
+            ResolveMapped(scanner,self, poiStaticClassRequest);
 
         if (poiStaticClassAddress == 0)
         {
@@ -1077,7 +1103,7 @@ namespace MiniMapFingerprints
             PLUGIN_SCAN_FUNCTION_START;
 
         const uintptr_t poiCategoryAddress =
-            scanner->Resolve(self, &poiCategoryRequest);
+            ResolveMapped(scanner,self, poiCategoryRequest);
 
         if (poiCategoryAddress == 0)
         {
@@ -1106,7 +1132,7 @@ namespace MiniMapFingerprints
             PLUGIN_SCAN_FUNCTION_START;
 
         const uintptr_t markerFilterAddress =
-            scanner->Resolve(self, &markerFilterRequest);
+            ResolveMapped(scanner,self, markerFilterRequest);
 
         if (markerFilterAddress == 0)
         {
@@ -1157,9 +1183,9 @@ namespace MiniMapFingerprints
             PLUGIN_SCAN_CODE;
 
         const uintptr_t abandonBaseCompletedAddress =
-            scanner->Resolve(
+            ResolveMapped(scanner,
                 self,
-                &abandonBaseCompletedRequest);
+                abandonBaseCompletedRequest);
 
         if (abandonBaseCompletedAddress == 0)
         {
@@ -1191,7 +1217,7 @@ namespace MiniMapFingerprints
             PLUGIN_SCAN_FUNCTION_START;
 
         const uintptr_t foundableCategoryAddress =
-            scanner->Resolve(self, &foundableCategoryRequest);
+            ResolveMapped(scanner,self, foundableCategoryRequest);
 
         if (foundableCategoryAddress == 0)
         {
@@ -1213,7 +1239,7 @@ namespace MiniMapFingerprints
             request.flags = PLUGIN_SCAN_FLAG_NONE;
             request.module = nullptr;
             request.resultOffset = 0;
-            addresses.retainObject = scanner->Resolve(self, &request);
+            addresses.retainObject = ResolveMapped(scanner,self, request);
             if (!addresses.retainObject) return false;
         }
         {
@@ -1224,7 +1250,7 @@ namespace MiniMapFingerprints
             request.flags = PLUGIN_SCAN_FLAG_NONE;
             request.module = nullptr;
             request.resultOffset = 0;
-            addresses.releaseObject = scanner->Resolve(self, &request);
+            addresses.releaseObject = ResolveMapped(scanner,self, request);
             if (!addresses.releaseObject) return false;
         }
         {
@@ -1235,7 +1261,7 @@ namespace MiniMapFingerprints
             request.flags = PLUGIN_SCAN_FLAG_NONE;
             request.module = nullptr;
             request.resultOffset = 0;
-            addresses.nameEqualsWide = scanner->Resolve(self, &request);
+            addresses.nameEqualsWide = ResolveMapped(scanner,self, request);
             if (!addresses.nameEqualsWide) return false;
         }
         // Shared thread predicate is also required by the standalone payload adapter.
@@ -1247,7 +1273,7 @@ namespace MiniMapFingerprints
             request.flags = PLUGIN_SCAN_FLAG_NONE;
             request.module = nullptr;
             request.resultOffset = 0;
-            addresses.isGameThread = scanner->Resolve(self, &request);
+            addresses.isGameThread = ResolveMapped(scanner,self, request);
             if (!addresses.isGameThread) return false;
         }
 
@@ -1255,14 +1281,14 @@ namespace MiniMapFingerprints
         // The getter's generic forwarding body is not unique. Follow the call
         // at +0x0C in SetActorPlacementPayloadData's unique numerical-copy site.
         PluginScanRequest splinePayloadRequest = PLUGIN_SCAN_REQUEST_INIT;
-        splinePayloadRequest.hookName = "MiniMap::SplinePayload::GetSplineActorData";
+        splinePayloadRequest.hookName = "SplinePayload::GetSplineActorData";
         splinePayloadRequest.pattern =
             "48 8D 97 30 03 00 00 48 8D 4C 24 58 E8 ?? ?? ?? ?? "
             "83 BC 24 D0 00 00 00 00 48 8B CF 7E ?? 48 8B 07";
         splinePayloadRequest.kind = PLUGIN_SCAN_FUNCTION_START;
         splinePayloadRequest.flags = PLUGIN_SCAN_FLAG_FOLLOW_REL32;
         splinePayloadRequest.followRel32At = 0x0C;
-        addresses.getSplineActorData = scanner->Resolve(self, &splinePayloadRequest);
+        addresses.getSplineActorData = ResolveMapped(scanner,self, splinePayloadRequest);
         if (!addresses.getSplineActorData) return false;
 
         PluginScanRequest splinePayloadDestroyRequest = PLUGIN_SCAN_REQUEST_INIT;
@@ -1274,7 +1300,7 @@ namespace MiniMapFingerprints
             "48 8D 05 ?? ?? ?? ?? 48 89 03 48 8B 4B 50";
         splinePayloadDestroyRequest.kind = PLUGIN_SCAN_FUNCTION_START;
         splinePayloadDestroyRequest.flags = PLUGIN_SCAN_FLAG_NONE;
-        addresses.destroySplineActorPayloadData = scanner->Resolve(self, &splinePayloadDestroyRequest);
+        addresses.destroySplineActorPayloadData = ResolveMapped(scanner,self, splinePayloadDestroyRequest);
         if (!addresses.destroySplineActorPayloadData) return false;
 
         // Warm the exact type cache used by GetValue during NativeApi initialization.
@@ -1288,7 +1314,7 @@ namespace MiniMapFingerprints
             "E8 ?? ?? ?? ?? 48 89 05 ?? ?? ?? ?? 48 83 C4 28 C3";
         splinePayloadTypeRequest.kind = PLUGIN_SCAN_FUNCTION_START;
         splinePayloadTypeRequest.flags = PLUGIN_SCAN_FLAG_NONE;
-        addresses.splineActorPayloadStaticStruct = scanner->Resolve(self, &splinePayloadTypeRequest);
+        addresses.splineActorPayloadStaticStruct = ResolveMapped(scanner,self, splinePayloadTypeRequest);
         if (!addresses.splineActorPayloadStaticStruct) return false;
 #endif
 
@@ -1310,7 +1336,7 @@ namespace MiniMapFingerprints
             PLUGIN_SCAN_FUNCTION_START;
 
         const uintptr_t massSubsystemAddress =
-            scanner->Resolve(self, &massSubsystemRequest);
+            ResolveMapped(scanner,self, massSubsystemRequest);
 
         if (massSubsystemAddress == 0)
         {
@@ -1338,7 +1364,7 @@ namespace MiniMapFingerprints
             PLUGIN_SCAN_FUNCTION_START;
 
         const uintptr_t massQueryCtorAddress =
-            scanner->Resolve(self, &massQueryCtorRequest);
+            ResolveMapped(scanner,self, massQueryCtorRequest);
 
         if (massQueryCtorAddress == 0)
         {
@@ -1368,7 +1394,7 @@ namespace MiniMapFingerprints
         massRequirementsRequest.followRel32At = 0x21;
 
         const uintptr_t inventoryRequirementAddress =
-            scanner->Resolve(self, &massRequirementsRequest);
+            ResolveMapped(scanner,self, massRequirementsRequest);
 
         if (inventoryRequirementAddress == 0)
         {
@@ -1383,7 +1409,7 @@ namespace MiniMapFingerprints
         massRequirementsRequest.followRel32At = 0x32;
 
         const uintptr_t transformRequirementAddress =
-            scanner->Resolve(self, &massRequirementsRequest);
+            ResolveMapped(scanner,self, massRequirementsRequest);
 
         if (transformRequirementAddress == 0)
         {
@@ -1399,7 +1425,7 @@ namespace MiniMapFingerprints
         massRequirementsRequest.followRel32At = 0x40;
 
         const uintptr_t foundableParametersRequirementAddress =
-            scanner->Resolve(self, &massRequirementsRequest);
+            ResolveMapped(scanner,self, massRequirementsRequest);
 
         if (foundableParametersRequirementAddress == 0)
         {
@@ -1430,7 +1456,7 @@ namespace MiniMapFingerprints
             PLUGIN_SCAN_FUNCTION_START;
 
         const uintptr_t foundableTagAddress =
-            scanner->Resolve(self, &foundableTagRequest);
+            ResolveMapped(scanner,self, foundableTagRequest);
 
         if (foundableTagAddress == 0)
         {
@@ -1460,7 +1486,7 @@ namespace MiniMapFingerprints
             PLUGIN_SCAN_FUNCTION_START;
 
         const uintptr_t massQueryDtorAddress =
-            scanner->Resolve(self, &massQueryDtorRequest);
+            ResolveMapped(scanner,self, massQueryDtorRequest);
 
         if (massQueryDtorAddress == 0)
         {
@@ -1489,7 +1515,7 @@ namespace MiniMapFingerprints
             PLUGIN_SCAN_FUNCTION_START;
 
         const uintptr_t matchingHandlesAddress =
-            scanner->Resolve(self, &matchingHandlesRequest);
+            ResolveMapped(scanner,self, matchingHandlesRequest);
 
         if (matchingHandlesAddress == 0)
         {
@@ -1522,7 +1548,7 @@ namespace MiniMapFingerprints
             PLUGIN_SCAN_FUNCTION_START;
 
         const uintptr_t fragmentDataAddress =
-            scanner->Resolve(self, &fragmentDataRequest);
+            ResolveMapped(scanner,self, fragmentDataRequest);
 
         if (fragmentDataAddress == 0)
         {
@@ -1537,7 +1563,7 @@ namespace MiniMapFingerprints
         fragmentDataRequest.followRel32At = 0x00;
 
         const uintptr_t transformStaticStructAddress =
-            scanner->Resolve(self, &fragmentDataRequest);
+            ResolveMapped(scanner,self, fragmentDataRequest);
 
         if (transformStaticStructAddress == 0)
         {
@@ -1573,7 +1599,7 @@ namespace MiniMapFingerprints
             PLUGIN_SCAN_FUNCTION_START;
 
         const uintptr_t constSharedDataAddress =
-            scanner->Resolve(self, &constSharedDataRequest);
+            ResolveMapped(scanner,self, constSharedDataRequest);
 
         if (constSharedDataAddress == 0)
         {
@@ -1608,7 +1634,7 @@ namespace MiniMapFingerprints
             PLUGIN_SCAN_FUNCTION_START;
 
         const uintptr_t inventoryStaticStructAddress =
-            scanner->Resolve(self, &inventoryStaticStructRequest);
+            ResolveMapped(scanner,self, inventoryStaticStructRequest);
 
         if (inventoryStaticStructAddress == 0)
         {
@@ -1637,7 +1663,7 @@ namespace MiniMapFingerprints
             PLUGIN_SCAN_FUNCTION_START;
 
         const uintptr_t foundableParametersStructAddress =
-            scanner->Resolve(self, &foundableParametersStructRequest);
+            ResolveMapped(scanner,self, foundableParametersStructRequest);
 
         if (foundableParametersStructAddress == 0)
         {
@@ -1662,7 +1688,7 @@ namespace MiniMapFingerprints
             request.kind = PLUGIN_SCAN_FUNCTION_START;
             request.resultOffset = 0;
             request.module = nullptr;
-            addresses.addEnemyStateRequirement = scanner->Resolve(self, &request);
+            addresses.addEnemyStateRequirement = ResolveMapped(scanner,self, request);
             if (addresses.addEnemyStateRequirement == 0)
             {
                 return false;
@@ -1685,7 +1711,7 @@ namespace MiniMapFingerprints
             request.kind = PLUGIN_SCAN_FUNCTION_START;
             request.resultOffset = 0;
             request.module = nullptr;
-            addresses.enemyStateFragmentStaticStruct = scanner->Resolve(self, &request);
+            addresses.enemyStateFragmentStaticStruct = ResolveMapped(scanner,self, request);
             if (addresses.enemyStateFragmentStaticStruct == 0)
             {
                 return false;
@@ -1707,7 +1733,7 @@ namespace MiniMapFingerprints
             request.kind = PLUGIN_SCAN_FUNCTION_START;
             request.resultOffset = 0;
             request.module = nullptr;
-            addresses.enemyTagStaticStruct = scanner->Resolve(self, &request);
+            addresses.enemyTagStaticStruct = ResolveMapped(scanner,self, request);
             if (addresses.enemyTagStaticStruct == 0)
             {
                 return false;
@@ -1727,7 +1753,7 @@ namespace MiniMapFingerprints
             request.kind = PLUGIN_SCAN_FUNCTION_START;
             request.resultOffset = 0;
             request.module = nullptr;
-            addresses.neutralTagStaticStruct = scanner->Resolve(self, &request);
+            addresses.neutralTagStaticStruct = ResolveMapped(scanner,self, request);
             if (addresses.neutralTagStaticStruct == 0)
             {
                 return false;
@@ -1748,7 +1774,7 @@ namespace MiniMapFingerprints
             request.kind = PLUGIN_SCAN_FUNCTION_START;
             request.resultOffset = 0;
             request.module = nullptr;
-            addresses.addTagRequirement = scanner->Resolve(self, &request);
+            addresses.addTagRequirement = ResolveMapped(scanner,self, request);
             if (addresses.addTagRequirement == 0)
             {
                 return false;
@@ -1771,7 +1797,7 @@ namespace MiniMapFingerprints
             request.followRel32At = followAt >= 0 ? followAt : 0;
             request.resultOffset = 0;
             request.module = nullptr;
-            target = scanner->Resolve(self, &request);
+            target = ResolveMapped(scanner,self, request);
             LOG_DEBUG("MiniMap: building native: resolve %s = 0x%llX", name,
                 static_cast<unsigned long long>(target));
         };
@@ -1807,7 +1833,7 @@ namespace MiniMapFingerprints
             request.flags = PLUGIN_SCAN_FLAG_NONE;
             request.module = nullptr;
             request.resultOffset = 0;
-            addresses.spawnObject = scanner->Resolve(self, &request);
+            addresses.spawnObject = ResolveMapped(scanner,self, request);
             if (!addresses.spawnObject) return false;
         }
         {
@@ -1818,7 +1844,7 @@ namespace MiniMapFingerprints
             request.flags = PLUGIN_SCAN_FLAG_NONE;
             request.module = nullptr;
             request.resultOffset = 0;
-            addresses.setObjectFlags = scanner->Resolve(self, &request);
+            addresses.setObjectFlags = ResolveMapped(scanner,self, request);
             if (!addresses.setObjectFlags) return false;
         }
 
@@ -1831,7 +1857,7 @@ namespace MiniMapFingerprints
             request.flags = PLUGIN_SCAN_FLAG_NONE;
             request.module = nullptr;
             request.resultOffset = 0;
-            addresses.registerComponent = scanner->Resolve(self, &request);
+            addresses.registerComponent = ResolveMapped(scanner,self, request);
             if (!addresses.registerComponent) return false;
         }
         {
@@ -1842,7 +1868,7 @@ namespace MiniMapFingerprints
             request.flags = PLUGIN_SCAN_FLAG_NONE;
             request.module = nullptr;
             request.resultOffset = 0;
-            addresses.unregisterComponent = scanner->Resolve(self, &request);
+            addresses.unregisterComponent = ResolveMapped(scanner,self, request);
             if (!addresses.unregisterComponent) return false;
         }
         {
@@ -1853,7 +1879,7 @@ namespace MiniMapFingerprints
             request.flags = PLUGIN_SCAN_FLAG_NONE;
             request.module = nullptr;
             request.resultOffset = 0;
-            addresses.destroyComponent = scanner->Resolve(self, &request);
+            addresses.destroyComponent = ResolveMapped(scanner,self, request);
             if (!addresses.destroyComponent) return false;
         }
         {
@@ -1864,7 +1890,7 @@ namespace MiniMapFingerprints
             request.flags = PLUGIN_SCAN_FLAG_NONE;
             request.module = nullptr;
             request.resultOffset = 0;
-            addresses.initRenderTarget = scanner->Resolve(self, &request);
+            addresses.initRenderTarget = ResolveMapped(scanner,self, request);
             if (!addresses.initRenderTarget) return false;
         }
         {
@@ -1875,7 +1901,7 @@ namespace MiniMapFingerprints
             request.flags = PLUGIN_SCAN_FLAG_NONE;
             request.module = nullptr;
             request.resultOffset = 0;
-            addresses.getRenderTargetResource = scanner->Resolve(self, &request);
+            addresses.getRenderTargetResource = ResolveMapped(scanner,self, request);
             if (!addresses.getRenderTargetResource) return false;
         }
         {
@@ -1886,7 +1912,7 @@ namespace MiniMapFingerprints
             request.flags = PLUGIN_SCAN_FLAG_NONE;
             request.module = nullptr;
             request.resultOffset = 0;
-            addresses.transitionResources = scanner->Resolve(self, &request);
+            addresses.transitionResources = ResolveMapped(scanner,self, request);
             if (!addresses.transitionResources) return false;
         }
         {
@@ -1897,7 +1923,7 @@ namespace MiniMapFingerprints
             request.flags = PLUGIN_SCAN_FLAG_NONE;
             request.module = nullptr;
             request.resultOffset = 0;
-            addresses.renderFenceConstruct = scanner->Resolve(self, &request);
+            addresses.renderFenceConstruct = ResolveMapped(scanner,self, request);
             if (!addresses.renderFenceConstruct) return false;
         }
         {
@@ -1908,7 +1934,7 @@ namespace MiniMapFingerprints
             request.flags = PLUGIN_SCAN_FLAG_NONE;
             request.module = nullptr;
             request.resultOffset = 0;
-            addresses.renderFenceDestroy = scanner->Resolve(self, &request);
+            addresses.renderFenceDestroy = ResolveMapped(scanner,self, request);
             if (!addresses.renderFenceDestroy) return false;
         }
         {
@@ -1919,7 +1945,7 @@ namespace MiniMapFingerprints
             request.flags = PLUGIN_SCAN_FLAG_NONE;
             request.module = nullptr;
             request.resultOffset = 0;
-            addresses.renderFenceBegin = scanner->Resolve(self, &request);
+            addresses.renderFenceBegin = ResolveMapped(scanner,self, request);
             if (!addresses.renderFenceBegin) return false;
         }
         {
@@ -1930,7 +1956,7 @@ namespace MiniMapFingerprints
             request.flags = PLUGIN_SCAN_FLAG_NONE;
             request.module = nullptr;
             request.resultOffset = 0;
-            addresses.renderFencePoll = scanner->Resolve(self, &request);
+            addresses.renderFencePoll = ResolveMapped(scanner,self, request);
             if (!addresses.renderFencePoll) return false;
         }
 #endif
@@ -1944,7 +1970,7 @@ namespace MiniMapFingerprints
             request.flags = PLUGIN_SCAN_FLAG_NONE;
             request.module = nullptr;
             request.resultOffset = 0;
-            addresses.readbackFromValidEName = scanner->Resolve(self, &request);
+            addresses.readbackFromValidEName = ResolveMapped(scanner,self, request);
             if (!addresses.readbackFromValidEName) return false;
         }
         {
@@ -1955,7 +1981,7 @@ namespace MiniMapFingerprints
             request.flags = PLUGIN_SCAN_FLAG_NONE;
             request.module = nullptr;
             request.resultOffset = 0;
-            addresses.readbackSubmit = scanner->Resolve(self, &request);
+            addresses.readbackSubmit = ResolveMapped(scanner,self, request);
             if (!addresses.readbackSubmit) return false;
         }
         {
@@ -1966,7 +1992,7 @@ namespace MiniMapFingerprints
             request.flags = PLUGIN_SCAN_FLAG_NONE;
             request.module = nullptr;
             request.resultOffset = 0;
-            addresses.readbackImmediate = scanner->Resolve(self, &request);
+            addresses.readbackImmediate = ResolveMapped(scanner,self, request);
             if (!addresses.readbackImmediate) return false;
         }
         {
@@ -1977,7 +2003,7 @@ namespace MiniMapFingerprints
             request.flags = PLUGIN_SCAN_FLAG_NONE;
             request.module = nullptr;
             request.resultOffset = 0;
-            addresses.readbackCreate = scanner->Resolve(self, &request);
+            addresses.readbackCreate = ResolveMapped(scanner,self, request);
             if (!addresses.readbackCreate) return false;
         }
         {
@@ -1988,7 +2014,7 @@ namespace MiniMapFingerprints
             request.flags = PLUGIN_SCAN_FLAG_NONE;
             request.module = nullptr;
             request.resultOffset = 0;
-            addresses.readbackConstruct = scanner->Resolve(self, &request);
+            addresses.readbackConstruct = ResolveMapped(scanner,self, request);
             if (!addresses.readbackConstruct) return false;
         }
         {
@@ -1999,7 +2025,7 @@ namespace MiniMapFingerprints
             request.flags = PLUGIN_SCAN_FLAG_NONE;
             request.module = nullptr;
             request.resultOffset = 0;
-            addresses.readbackDestroy = scanner->Resolve(self, &request);
+            addresses.readbackDestroy = ResolveMapped(scanner,self, request);
             if (!addresses.readbackDestroy) return false;
         }
         {
@@ -2010,7 +2036,7 @@ namespace MiniMapFingerprints
             request.flags = PLUGIN_SCAN_FLAG_NONE;
             request.module = nullptr;
             request.resultOffset = 0;
-            addresses.readbackCopy = scanner->Resolve(self, &request);
+            addresses.readbackCopy = ResolveMapped(scanner,self, request);
             if (!addresses.readbackCopy) return false;
         }
         {
@@ -2021,7 +2047,7 @@ namespace MiniMapFingerprints
             request.flags = PLUGIN_SCAN_FLAG_NONE;
             request.module = nullptr;
             request.resultOffset = 0;
-            addresses.readbackLock = scanner->Resolve(self, &request);
+            addresses.readbackLock = ResolveMapped(scanner,self, request);
             if (!addresses.readbackLock) return false;
         }
         {
@@ -2032,7 +2058,7 @@ namespace MiniMapFingerprints
             request.flags = PLUGIN_SCAN_FLAG_NONE;
             request.module = nullptr;
             request.resultOffset = 0;
-            addresses.readbackUnlock = scanner->Resolve(self, &request);
+            addresses.readbackUnlock = ResolveMapped(scanner,self, request);
             if (!addresses.readbackUnlock) return false;
         }
         {
@@ -2043,7 +2069,7 @@ namespace MiniMapFingerprints
             request.flags = PLUGIN_SCAN_FLAG_NONE;
             request.module = nullptr;
             request.resultOffset = 0;
-            addresses.readbackPoll = scanner->Resolve(self, &request);
+            addresses.readbackPoll = ResolveMapped(scanner,self, request);
             if (!addresses.readbackPoll) return false;
         }
         {
@@ -2054,7 +2080,7 @@ namespace MiniMapFingerprints
             request.flags = PLUGIN_SCAN_FLAG_NONE;
             request.module = nullptr;
             request.resultOffset = 0;
-            addresses.readbackMarkForDelete = scanner->Resolve(self, &request);
+            addresses.readbackMarkForDelete = ResolveMapped(scanner,self, request);
             if (!addresses.readbackMarkForDelete) return false;
         }
         {
@@ -2065,7 +2091,7 @@ namespace MiniMapFingerprints
             request.flags = PLUGIN_SCAN_FLAG_NONE;
             request.module = nullptr;
             request.resultOffset = 0;
-            addresses.readbackMalloc = scanner->Resolve(self, &request);
+            addresses.readbackMalloc = ResolveMapped(scanner,self, request);
             if (!addresses.readbackMalloc) return false;
         }
         {
@@ -2076,7 +2102,7 @@ namespace MiniMapFingerprints
             request.flags = PLUGIN_SCAN_FLAG_NONE;
             request.module = nullptr;
             request.resultOffset = 0;
-            addresses.readbackFree = scanner->Resolve(self, &request);
+            addresses.readbackFree = ResolveMapped(scanner,self, request);
             if (!addresses.readbackFree) return false;
         }
         // The readback pattern extends the existing FMemory::Free fingerprint.
@@ -2163,7 +2189,7 @@ namespace MiniMapFingerprints
             request.flags = PLUGIN_SCAN_FLAG_NONE;
             request.module = nullptr;
             request.resultOffset = 0;
-            const uintptr_t anchor = scanner->Resolve(self, &request);
+            const uintptr_t anchor = ResolveMapped(scanner,self, request);
             return anchor && decodeGlobal(name, anchor, displacementOffset, instructionSize, opcode, 8, 1, output);
         };
         if (!resolveReadbackGlobal("MiniMap::Readback::DynamicRHI",
@@ -2187,7 +2213,7 @@ namespace MiniMapFingerprints
             request.flags = PLUGIN_SCAN_FLAG_NONE;
             request.module = nullptr;
             request.resultOffset = 0;
-            const uintptr_t anchor = scanner->Resolve(self, &request);
+            const uintptr_t anchor = ResolveMapped(scanner,self, request);
             if (!anchor) return false;
             auto invalid = [&]()
             {
@@ -2220,7 +2246,7 @@ namespace MiniMapFingerprints
             request.flags = PLUGIN_SCAN_FLAG_NONE;
             request.module = nullptr;
             request.resultOffset = 0;
-            output = scanner->Resolve(self, &request);
+            output = ResolveMapped(scanner,self, request);
             return output != 0;
         };
         if (!resolvePrivateWorld("MiniMap::PrivateWorld::createWorld",

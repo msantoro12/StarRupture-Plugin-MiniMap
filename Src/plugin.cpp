@@ -11,6 +11,7 @@
 #include "Input/MouseWheel.h"
 #include "SDK/CommonUI_classes.hpp"
 #include "SDK/ChimeraUI_classes.hpp"
+#include "plugin_map.h"
 #include "Map/Buildings/BuildingCache.h"
 #include "Map/Buildings/BuildingScheduler.h"
 #include "Map/Buildings/BuildingAtlas.h"
@@ -306,7 +307,11 @@ static PluginInfo s_pluginInfo = {
     "Kian369",
     "A configurable on-screen minimap for StarRupture",
     PLUGIN_INTERFACE_VERSION,
-    MINIMAP_EXPORTS_TARGET
+    MINIMAP_EXPORTS_TARGET,
+    PLUGIN_GAME_BUILT_CL,
+    // TODO: set PLUGIN_MAP_MIGRATED once the loader admits plugins by built CL and CI
+    // has checked the used set.
+    0
 };
 
 extern "C" __declspec(dllexport)
@@ -541,6 +546,9 @@ extern "C"
     __declspec(dllexport)
         bool PluginInit(IPluginSelf* self)
     {
+        // First, before any early return: off its game build the loader refuses a
+        // plugin whose PluginInit did not take the globals.
+        PluginSdkRuntime::Init(self->hooks);
         ResetPluginInitHookBaseline();
 #ifdef MODLOADER_CLIENT_BUILD
         MiniMapCacheIdentity::Reset();

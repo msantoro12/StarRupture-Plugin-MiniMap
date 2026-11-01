@@ -15,7 +15,7 @@
 // PluginInfo advertises the mandatory SDK version; the loader rejects unsupported
 // tables before PluginInit. Pointer checks below are availability checks, not an
 // older-interface compatibility probe.
-static_assert(PLUGIN_INTERFACE_VERSION == 70, "Review the wheel ABI when updating the SDK");
+static_assert(PLUGIN_INTERFACE_VERSION == 72, "Review the wheel ABI when updating the SDK");
 
 namespace
 {
