@@ -14,6 +14,7 @@
 #include "Map/Buildings/BuildingVisuals.h"
 #include "Map/PointsOfInterest/PointsOfInterest.h"
 #include "Map/Terrain/Terrain.h"
+#include "Native/GameFields.h"
 
 #include "plugin.h"
 #include "plugin_helpers.h"
@@ -216,29 +217,41 @@ namespace
             transform,
             settings))
         {
-            MiniMapBuildingVisuals::Render(ui, transform, settings.Buildings);
-            MiniMapFogOfWar::Render(
-                ui,
-                transform, settings.Fog);
+            if (MiniMapFields::Features::Buildings.On())
+            {
+                MiniMapBuildingVisuals::Render(ui, transform, settings.Buildings);
+            }
+            if (MiniMapFields::Features::FogOfWar.On())
+            {
+                MiniMapFogOfWar::Render(
+                    ui,
+                    transform, settings.Fog);
+            }
 
-            MiniMapAlienActors::SetViewport(transform);
-            MiniMapBuildingCollector::SetViewport(transform);
+            if (MiniMapFields::Features::AlienActors.On())
+            {
+                MiniMapAlienActors::SetViewport(transform);
+            }
+            if (MiniMapFields::Features::Buildings.On())
+            {
+                MiniMapBuildingCollector::SetViewport(transform);
+            }
 
-            if (settings.Foundables.ShowLayer)
+            if (MiniMapFields::Features::Foundables.On() && settings.Foundables.ShowLayer)
             {
                 MiniMapFoundables::Render(
                     ui,
                     transform, settings.Foundables, settings.Fog);
             }
 
-            if (settings.POI.ShowLayer)
+            if (MiniMapFields::Features::PointsOfInterest.On() && settings.POI.ShowLayer)
             {
                 MiniMapPointsOfInterest::Render(
                     ui,
                     transform, settings.POI, settings.Fog);
             }
 
-            if (settings.ShowAlienActors)
+            if (MiniMapFields::Features::AlienActors.On() && settings.ShowAlienActors)
             {
                 MiniMapAlienActors::Render(ui, transform, settings.Fog);
             }

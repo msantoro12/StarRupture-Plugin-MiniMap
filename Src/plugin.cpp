@@ -5,6 +5,7 @@
 
 #ifdef MODLOADER_CLIENT_BUILD
 #include "Native/Fingerprints.h"
+#include "Native/GameFields.h"
 #include "Native/NativeApi.h"
 #include "Native/ReadbackNativeAdapter.h"
 #include "UI/MiniMapUI.h"
@@ -301,6 +302,12 @@ void MiniMapCacheIdentity::ClearOnExit()
 #endif
 
 
+// The building pictures need the buildings layer and the capture natives.
+static bool BuildingSpritesOn()
+{
+    return MiniMapFields::Features::Buildings.On() && MiniMapFields::Features::BuildingSprites.On();
+}
+
 static PluginInfo s_pluginInfo = {
     "MiniMap",
     MODLOADER_BUILD_TAG,
@@ -323,6 +330,10 @@ void OnPluginLoadHooks(
 
     g_resolvedAddresses = {};
 
+    // The layers are declared before any key is resolved, so a miss turns off
+    // the layer it belongs to and not the plugin.
+    MiniMapFields::Features::Declare(self, scanner);
+
     const bool fingerprintsResolved=MiniMapFingerprints::Resolve(
         self,
         scanner,
@@ -335,6 +346,8 @@ void OnPluginLoadHooks(
         MiniMapNative::Shutdown();
         return;
     }
+
+    MiniMapFields::Resolve(self, scanner);
 
     if (!MiniMapNative::Initialize(
         g_resolvedAddresses))
@@ -352,7 +365,7 @@ void OnPluginLoadHooks(
 #endif
 
     // Optional private preflight: failure never changes production readiness.
-    MiniMapReadbackNative::ResolvePrerequisites();
+    if (BuildingSpritesOn()) MiniMapReadbackNative::ResolvePrerequisites();
 
 #else
 
@@ -396,7 +409,7 @@ static bool BuildingServiceGameThread() noexcept
 }
 static void OnBuildingSpriteRendererTick(float deltaTime)
 {
-    if(!MiniMapMap::GameplayReady())return;
+    if(!BuildingSpritesOn()||!MiniMapMap::GameplayReady())return;
     // Integration lock is outermost; FIFO/feedback locks are acquired only inside
     // it. Renderer functions never reacquire it or invoke scheduler transitions.
     {
@@ -454,10 +467,18 @@ static void OnExperienceLoadComplete()
         return;
     }
 
-    MiniMapFoundables::OnExperienceLoadComplete();
-    MiniMapAlienActors::OnExperienceLoadComplete();
-    MiniMapBuildingCollector::OnExperienceLoadComplete();
-    MiniMapPointsOfInterest::OnExperienceLoadComplete();
+    if(MiniMapFields::Features::Foundables.On())MiniMapFoundables::OnExperienceLoadComplete();
+    if(MiniMapFields::Features::AlienActors.On())MiniMapAlienActors::OnExperienceLoadComplete();
+    if(MiniMapFields::Features::Buildings.On())MiniMapBuildingCollector::OnExperienceLoadComplete();
+    if(MiniMapFields::Features::PointsOfInterest.On())MiniMapPointsOfInterest::OnExperienceLoadComplete();
+
+    if(!BuildingSpritesOn())
+    {
+        SetServicesAdmitted(true);
+        if (MiniMapConfig::VisibleAtStartup()) MiniMapUI::Show();
+        else MiniMapUI::Hide();
+        return;
+    }
 
     bool rendererReady=false;
     uint64_t buildingSession=0;
@@ -628,53 +649,56 @@ extern "C"
             return false;
         }
 
+        if (BuildingSpritesOn())
         {
-            std::lock_guard<std::mutex> lock(MiniMapBuildingSchedulerInternal::LifecycleMutex);
-            MiniMapBuildingScheduler::Initialize(g_buildingSpriteStatuses, g_buildingSpriteFifo);
-            MiniMapBuildingSpriteRenderer::Initialize(g_buildingSpriteFifo, MiniMapBuildingScheduler::FeedbackQueue());
+            {
+                std::lock_guard<std::mutex> lock(MiniMapBuildingSchedulerInternal::LifecycleMutex);
+                MiniMapBuildingScheduler::Initialize(g_buildingSpriteStatuses, g_buildingSpriteFifo);
+                MiniMapBuildingSpriteRenderer::Initialize(g_buildingSpriteFifo, MiniMapBuildingScheduler::FeedbackQueue());
+            }
+            if (!MiniMapBuildingAtlas::Initialize(g_buildingSpriteStatuses, pluginSelf->hooks->ImGuiTextures))
+            {
+                LOG_ERROR("MiniMap: atlas texture interface initialization failed");
+                MiniMapUI::Shutdown();
+                RemoveCommonUIHooks();
+                return false;
+            }
+            pluginSelf->hooks->Engine->RegisterOnTick(&OnBuildingSpriteRendererTick);
         }
-        if (!MiniMapBuildingAtlas::Initialize(g_buildingSpriteStatuses, pluginSelf->hooks->ImGuiTextures))
-        {
-            LOG_ERROR("MiniMap: atlas texture interface initialization failed");
-            MiniMapUI::Shutdown();
-            RemoveCommonUIHooks();
-            return false;
-        }
-        pluginSelf->hooks->Engine->RegisterOnTick(&OnBuildingSpriteRendererTick);
 
         // Close admission before module-specific native EndPlay cancellation.
         pluginSelf->hooks->World->RegisterOnBeforeWorldEndPlay(&OnBeforeWorldEndPlay);
 
-        if (!MiniMapFogOfWar::Initialize(
+        if (MiniMapFields::Features::FogOfWar.On() && !MiniMapFogOfWar::Initialize(
             pluginSelf))
         {
             LOG_ERROR(
                 "MiniMap: FOW diagnostic initialization failed");
         }
 
-        if (!MiniMapPointsOfInterest::Initialize(
+        if (MiniMapFields::Features::PointsOfInterest.On() && !MiniMapPointsOfInterest::Initialize(
             pluginSelf))
         {
             LOG_ERROR(
                 "MiniMap: landmark POI initialization failed");
         }
 
-        if (!MiniMapAlienActors::Initialize(pluginSelf))
+        if (MiniMapFields::Features::AlienActors.On() && !MiniMapAlienActors::Initialize(pluginSelf))
         {
             LOG_ERROR("MiniMap: Alien Actors initialization failed");
         }
 
-        if (!MiniMapBuildingCollector::Initialize(pluginSelf))
+        if (MiniMapFields::Features::Buildings.On() && !MiniMapBuildingCollector::Initialize(pluginSelf))
         {
             LOG_ERROR("MiniMap: Stage B.1 building collector initialization failed");
         }
 
-        if (!MiniMapBuildingVisuals::Initialize(pluginSelf))
+        if (MiniMapFields::Features::Buildings.On() && !MiniMapBuildingVisuals::Initialize(pluginSelf))
         {
             LOG_ERROR("MiniMap: building visuals initialization failed");
         }
 
-        if (!MiniMapFoundables::Initialize(
+        if (MiniMapFields::Features::Foundables.On() && !MiniMapFoundables::Initialize(
             pluginSelf))
         {
             LOG_ERROR(
