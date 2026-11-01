@@ -146,13 +146,30 @@ namespace MiniMapFields
 	inline auto BuildingDrone       = SR_FIELD(SDK::ACrCharacterDroneBase*, ACrCharacterPlayerBase, BuildingDrone, 0);
 	inline auto DroneOwner          = SR_FIELD(SDK::ACrCharacterPlayerBase*, ACrCharacterDroneBase, OwnerPlayer, 0);
 
+	// UCrPlayerMapMenuDataComponent::FOWData, the fog segments' TArray. The
+	// Game-SDK folds it into padding, so it has no SDK name: a native row, with
+	// CL-127004's offset for when the loader's map has none for the running build.
+	struct RawTArray
+	{
+		const void* Data = nullptr;
+		int32_t Num = 0;
+		int32_t Max = 0;
+	};
+	inline auto FogData = PluginField<RawTArray>{ { "UCrPlayerMapMenuDataComponent::FOWData",
+		"UCrPlayerMapMenuDataComponent", "FOWData", PLUGIN_FIELD_NATIVE, sizeof(RawTArray), 0x100 } };
+	inline const PluginFieldCandidate kFogDataRows[] = {
+		{ 127004, 0x100, static_cast<uint32_t>(sizeof(RawTArray)), 0, nullptr },
+	};
+
 	// Asks the loader for every row above. False when any did not resolve; the
 	// loader has then recorded the failure and refuses the plugin or turns off
 	// the feature that lists it.
 	inline bool Resolve(IPluginSelf* self, IPluginHookScanner* scanner)
 	{
+		const bool fog = PluginMap::ResolveField(scanner, self, FogData, kFogDataRows,
+			static_cast<uint32_t>(sizeof(kFogDataRows) / sizeof(kFogDataRows[0])));
 		return PluginMap::ResolveFields(scanner, self,
-			PlayerMainCharacter, IsDead, Status, BuildingDrone, DroneOwner);
+			PlayerMainCharacter, IsDead, Status, BuildingDrone, DroneOwner) && fog;
 	}
 
 	using PluginMap::KeysOf;
@@ -166,7 +183,7 @@ namespace MiniMapFields
 	namespace Features
 	{
 		inline PluginMap::Feature FogOfWar{ "fog-of-war", "Fog of war on the minimap",
-			KeysOf(),
+			KeysOf(FogData),
 			{ "Fog Of War.DisableFog", "Fog Of War.FeatherRange" } };
 
 		inline PluginMap::Feature PointsOfInterest{ "points-of-interest", "Points of interest on the minimap",
