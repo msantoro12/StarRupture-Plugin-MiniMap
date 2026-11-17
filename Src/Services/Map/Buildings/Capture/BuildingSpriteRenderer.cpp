@@ -421,6 +421,14 @@ namespace Services::Map::Buildings::Capture
 			capturerSubState_ != CapturerSubState::ExitCleanup;
 	}
 
+	/** Reports the states in which a readback command or retirement fence can still be queued. */
+	bool BuildingSpriteRenderer::HasNativeWorkPending() const noexcept
+	{
+		return capturerSubState_ == CapturerSubState::Active ||
+			capturerSubState_ == CapturerSubState::StopReleasing ||
+			capturerSubState_ == CapturerSubState::ExitCleanup;
+	}
+
 	/** Keeps request admission closed until the active request has safely retired. */
 	void BuildingSpriteRenderer::AdvanceLifecycleState(CapturerLifecycleState requestedState)
 	{

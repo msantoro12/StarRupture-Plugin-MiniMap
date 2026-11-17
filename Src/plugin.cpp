@@ -27,8 +27,10 @@
 #include "Services/Map/Buildings/Capture/BuildingSpriteRenderer.h"
 #include "PluginPaths.h"
 #include <array>
+#include <chrono>
 #include <filesystem>
 #include <memory>
+#include <thread>
 #endif
 
 #ifdef MODLOADER_CLIENT_BUILD
@@ -824,6 +826,55 @@ static bool StopBuildingMapGameplaySession()
         (g_buildingSpriteRenderer == nullptr || g_buildingSpriteRenderer->IsStopComplete());
 }
 
+// Longest Shutdown waits on the game thread for the sprite renderer's queued render-thread work. What has to
+// retire is one readback poll command and the private-world retirement fence; each needs only the render
+// thread and the GPU to pass it, which takes a few frames, so one second covers a few-frames-per-second worst case.
+static constexpr std::chrono::milliseconds kRendererExitDrainBound{1000};
+static bool g_modulePinned = false;
+
+// Keeps this DLL mapped so a render command that still carries code from it never runs unmapped memory.
+static void PinModule()
+{
+    if (g_modulePinned) return;
+    HMODULE module = nullptr;
+    if (!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
+        reinterpret_cast<LPCWSTR>(&PinModule), &module))
+    {
+        LOG_ERROR("MiniMap: capture teardown is incomplete and the module could not be pinned (error %lu)",
+            GetLastError());
+        return;
+    }
+    g_modulePinned = true;
+    LOG_ERROR("MiniMap: capture teardown did not finish; module pinned until the game exits, restart the game before loading MiniMap again");
+}
+
+// Retires the sprite renderer before the module can be freed. Lifecycle advancement needs the game thread, so only
+// that thread waits; any other thread cannot finish the teardown and pins instead when work may be queued.
+static void RetireBuildingSpriteRendererForShutdown()
+{
+    if (g_buildingSpriteRenderer == nullptr) return;
+    g_buildingSpriteRenderer->RequestExit();
+    g_buildingSpriteRenderer->ProcessLifecycle();
+    const auto* native = MiniMapNative::Get();
+    if (g_buildingSpriteRenderer->HasNativeWorkPending() &&
+        native != nullptr && native->player.isGameThread != nullptr && native->player.isGameThread())
+    {
+        // The render thread runs on its own, so sleeping here lets its queued commands and fence complete.
+        const auto start = std::chrono::steady_clock::now();
+        const auto deadline = start + kRendererExitDrainBound;
+        while (g_buildingSpriteRenderer->HasNativeWorkPending() && std::chrono::steady_clock::now() < deadline)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            g_buildingSpriteRenderer->ProcessLifecycle();
+        }
+        LOG_INFO("MiniMap: sprite renderer drain %s after %lld ms",
+            g_buildingSpriteRenderer->HasNativeWorkPending() ? "timed out" : "finished",
+            static_cast<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now() - start).count()));
+    }
+    if (g_buildingSpriteRenderer->HasNativeWorkPending()) PinModule();
+}
+
 static void OnWorldBeginPlay(SDK::UWorld* world)
 {
     if(!world||(world==MiniMapMap::GetWorld()&&!g_worldEnding))return;
@@ -973,6 +1024,11 @@ namespace MiniMap
     bool Initialize()
     {
 #ifdef MODLOADER_CLIENT_BUILD
+        if (g_modulePinned)
+        {
+            LOG_ERROR("MiniMap: this module stayed pinned after an incomplete shutdown; restart the game to load MiniMap again");
+            return false;
+        }
         MiniMapCacheIdentity::Reset();
 #endif
         auto* pluginSelf = GetSelf();
@@ -1344,10 +1400,13 @@ namespace MiniMap
         MiniMapTexturePublication::Shutdown();
         MiniMapConfig::Shutdown();
         RemoveCommonUIHooks();
-        if (g_buildingSpriteRenderer != nullptr)
+        RetireBuildingSpriteRendererForShutdown();
+        if (minimapCallbacksQuiescent && !buildingMapStopComplete)
         {
-            g_buildingSpriteRenderer->RequestExit();
-            g_buildingSpriteRenderer->ProcessLifecycle();
+            // The single Stop pass above cannot outlast a render fence; the drain has since retired the renderer.
+            buildingMapStopComplete =
+                (g_buildingSpriteRenderer == nullptr || !g_buildingSpriteRenderer->HasNativeWorkPending()) &&
+                (g_buildingMapService == nullptr || g_buildingMapService->StopGameSession());
         }
         RemoveEventRegistration(g_rendererTick);
         MiniMapCacheIdentity::Reset();

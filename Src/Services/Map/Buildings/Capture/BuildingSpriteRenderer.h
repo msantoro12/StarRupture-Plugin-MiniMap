@@ -129,6 +129,8 @@ namespace Services::Map::Buildings::Capture
 		void ProcessLifecycle();
 		/** Reports completed cleanup and requires the same game thread as lifecycle advancement. */
 		bool IsStopComplete() const noexcept;
+		/** Reports whether an active capture, Stop release or Exit cleanup may still have render-thread work queued. */
+		bool HasNativeWorkPending() const noexcept;
 
 		/** Capturer lifecycle command requested by its plugin/service owner. */
 		enum class CapturerLifecycleState : std::uint8_t

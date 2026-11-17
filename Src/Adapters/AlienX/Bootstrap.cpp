@@ -1493,7 +1493,7 @@ namespace
         MINIMAP_EXPORTS_TARGET,
         PLUGIN_GAME_BUILT_CL,
         PluginLoadSetting(PluginReload::MENU) |
-            PluginUnloadSetting(PluginReload::MENU)
+            PluginUnloadSetting(PluginReload::ANYTIME)
     };
 
     void ReleaseRuntime() noexcept
