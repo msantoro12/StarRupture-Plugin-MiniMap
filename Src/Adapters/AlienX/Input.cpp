@@ -5,8 +5,11 @@
 
 // Preserve the former input ABI/vocabulary review checks inside the adapter.
 // v74 only appended two ImGui window-size calls and v75 panel title-bar calls and
-// window flags; the wheel and key events are as in v73.
-static_assert(PLUGIN_INTERFACE_VERSION >= 73 && PLUGIN_INTERFACE_VERSION <= 75,
+// window flags; v77 added the image library and nothing the wheel or key events
+// use (v76 was never released). The wheel and key events are as in v73. When the
+// version goes past 77, review PluginMouseWheelEvent, PluginWheelModifiers and the
+// RegisterMouseWheel entries of IPluginInputEvents against this adapter.
+static_assert(PLUGIN_INTERFACE_VERSION >= 73 && PLUGIN_INTERFACE_VERSION <= 77,
     "Review the wheel ABI when updating the SDK");
 static_assert(std::size_t(EModKey::Unknown) == 101);
 
