@@ -18,12 +18,16 @@ namespace MiniMap::Services
         std::optional<std::uint32_t> followRel32At;
         // Opts this required function request into the loader's global symbol map.
         std::optional<std::string_view> versionMapKey;
+        // A miss is not fatal to admission: Resolve returns an error and the
+        // session stays usable. Only for keys a declared loader feature lists.
+        bool optional = false;
     };
 
     // Borrowed only during load admission; never retained in Runtime.
     // Main executable, exactly one match. Follow E8/E9 first (when requested),
     // then apply resultOffset and validate the target kind. Every failure is
-    // fatal to admission, including semantic validation reported through Fail.
+    // fatal to admission, including semantic validation reported through Fail,
+    // except a miss on a scan marked optional.
     class IRequiredScanner
     {
     public:

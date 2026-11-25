@@ -80,6 +80,13 @@ namespace
     MiniMapPointsOfInterest::FieldOffsets g_poiFieldOffsets{};
     MiniMapFoundables::AcquisitionFieldOffsets g_foundablesFieldOffsets{};
 
+    // Read by the loader for as long as the plugin is loaded, so it is static.
+    PluginMap::Feature g_terrainWaitFeature{
+        "terrain-texture-wait",
+        "Terrain texture hang guard",
+        {"UStreamableRenderAsset::HasPendingInitOrStreaming"},
+        {}};
+
     PluginFieldSpec g_fowDataField{
         "UCrPlayerMapMenuDataComponent::FOWData",
         "UCrPlayerMapMenuDataComponent",
@@ -2318,6 +2325,10 @@ extern "C" __declspec(dllexport) void OnPluginLoadHooks(
                 scanner->ReportFailure(self, "MiniMap::NativeDependencies", "invalid required scanner callback arguments");
             return;
         }
+        // Declared before the scans, so a miss on this key turns the feature
+        // off instead of refusing MiniMap (the terrain keeps its blocking wait).
+        PluginMap::DeclareFeatures(scanner, self, g_terrainWaitFeature);
+
         MiniMap::Adapters::AlienX::RequiredScanner requiredScanner(*self, *scanner);
         MiniMap::Adapters::AlienX::ResolveNativeDependencies(requiredScanner);
         if (requiredScanner.HasFailures())

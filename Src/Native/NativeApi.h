@@ -438,6 +438,11 @@ namespace MiniMapNative
                 bool,
                 bool);
 
+        using HasPendingInitOrStreamingFn =
+            bool (*)(
+                SDK::UStreamableRenderAsset*,
+                bool);
+
         using GetPlatformDataFn =
             void* (*)(
                 SDK::UTexture2D*);
@@ -482,6 +487,10 @@ namespace MiniMapNative
 
         WaitForPendingInitOrStreamingFn
             waitForPendingInitOrStreaming = nullptr;
+
+        // Optional: null when the loader did not resolve it.
+        HasPendingInitOrStreamingFn
+            hasPendingInitOrStreaming = nullptr;
 
         GetPlatformDataFn
             getPlatformData = nullptr;

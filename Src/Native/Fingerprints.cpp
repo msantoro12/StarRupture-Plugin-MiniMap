@@ -42,6 +42,16 @@ namespace MiniMapFingerprints
             return *result.value;
         };
 
+        // For a scan a declared loader feature lists: a miss leaves the
+        // address 0 and does not fail the whole resolution.
+        const auto resolveOptional = [&](RequiredScan request) -> uintptr_t
+        {
+            request.optional = true;
+            const auto result = scanner.Resolve(request);
+            return (result.status.error == MiniMap::Services::Error::None && result.value)
+                ? *result.value : 0;
+        };
+
         // UCommonActivatableWidget native lifecycle callbacks. These are the
         // shared post-transition virtual implementations used by the three
         // blocking game menus; reflected ActivateWidget/DeactivateWidget
@@ -480,6 +490,32 @@ namespace MiniMapFingerprints
 
         addresses.waitForPendingInitOrStreaming =
             waitPendingAddress;
+
+        // -------------------------------------------------------------------
+        // UStreamableRenderAsset::HasPendingInitOrStreaming
+        //
+        // The non-blocking check the wait above loops on: its first call, at
+        // the E8 byte 25 bytes into the pattern. Optional: without it the
+        // terrain keeps the blocking wait.
+        //
+        // Signature:
+        //
+        //   bool HasPendingInitOrStreaming(
+        //       bool bWaitForLODTransition) const
+        // -------------------------------------------------------------------
+
+        RequiredScan hasPendingRequest = waitPendingRequest;
+
+        hasPendingRequest.name =
+            "MiniMap::UStreamableRenderAsset::"
+            "HasPendingInitOrStreaming";
+        hasPendingRequest.versionMapKey = "UStreamableRenderAsset::HasPendingInitOrStreaming";
+        hasPendingRequest.followRel32At = 25;
+        hasPendingRequest.kind =
+            AddressKind::Code;
+
+        addresses.hasPendingInitOrStreaming =
+            resolveOptional(hasPendingRequest);
 
         // -------------------------------------------------------------------
         // UWorld::GetFirstPlayerController

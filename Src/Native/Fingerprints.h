@@ -25,6 +25,7 @@ namespace MiniMapFingerprints
 
         uintptr_t streamIn = 0;
         uintptr_t waitForPendingInitOrStreaming = 0;
+        uintptr_t hasPendingInitOrStreaming = 0; // optional; 0 keeps the blocking wait
         uintptr_t getFirstPlayerController = 0;
         uintptr_t getControlRotation = 0;
         uintptr_t isPlayerInForgottenEngine = 0;

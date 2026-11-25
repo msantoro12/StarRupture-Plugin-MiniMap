@@ -14,6 +14,9 @@ namespace MiniMap::Adapters::AlienX
         IPluginSelf& Self;
         IPluginHookScanner& Scanner;
         bool Failed = false;
+        // The loader counts a declared-feature miss as a session failure; this
+        // keeps one such miss from failing every scan after it.
+        bool OptionalMissed = false;
 
     public:
         RequiredScanner(IPluginSelf& self, IPluginHookScanner& scanner) noexcept;

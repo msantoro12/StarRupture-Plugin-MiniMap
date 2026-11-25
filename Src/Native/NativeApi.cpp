@@ -453,6 +453,11 @@ namespace MiniMapNative
             TextureApi::WaitForPendingInitOrStreamingFn>(
                 addresses.waitForPendingInitOrStreaming);
 
+        g_nativeApi.texture.hasPendingInitOrStreaming =
+            reinterpret_cast<
+            TextureApi::HasPendingInitOrStreamingFn>(
+                addresses.hasPendingInitOrStreaming);
+
         g_nativeApi.texture.getPlatformData =
             reinterpret_cast<TextureApi::GetPlatformDataFn>(
                 addresses.getPlatformData);

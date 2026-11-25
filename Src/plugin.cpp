@@ -371,6 +371,13 @@ void MiniMap::Adapters::AlienX::ResolveNativeDependencies(
         "MiniMap: native API initialized");
 #endif
 
+    if (g_resolvedAddresses.hasPendingInitOrStreaming == 0)
+    {
+        LOG_WARN(
+            "MiniMap: terrain: non-blocking texture check unavailable "
+            "on this game build; terrain textures use the blocking wait");
+    }
+
 
 #else
 

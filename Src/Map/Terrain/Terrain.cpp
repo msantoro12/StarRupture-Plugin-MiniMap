@@ -26,6 +26,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -676,12 +677,88 @@ namespace
     }
 
 
+    // Chunks whose source texture was still initializing or streaming the last
+    // time they were tried. Game thread only (ReconcileViewport runs from the
+    // tick). Keyed by chunk identity; no pointer is kept.
+    struct PendingChunk
+    {
+        ChunkIdentity Identity = {};
+        std::chrono::steady_clock::time_point Since = {};
+        bool GaveUp = false;
+    };
+
+    std::vector<PendingChunk> g_pendingChunks;
+
+    constexpr std::chrono::seconds kPendingGiveUp{30};
+
+    // True when this chunk must be skipped this tick. The engine's wait has no
+    // timeout and froze the game thread, so a source texture that is not ready
+    // is left to finish on later frames and the chunk is retried on the next
+    // reconcile. After kPendingGiveUp the chunk is dropped and logged once.
+    // Without the non-blocking check this is always false (the old blocking
+    // wait runs).
+    bool SourceTexturePending(
+        const MiniMapTerrainSource::SourceTile& sourceTile,
+        const ChunkIdentity& identity)
+    {
+        const MiniMapNative::NativeApi* native =
+            MiniMapNative::Get();
+
+        if (native == nullptr ||
+            native->texture.hasPendingInitOrStreaming == nullptr ||
+            sourceTile.Texture == nullptr)
+        {
+            return false;
+        }
+
+        const auto entry = std::find_if(g_pendingChunks.begin(), g_pendingChunks.end(),
+            [&](const PendingChunk& pending) { return SameIdentity(pending.Identity, identity); });
+
+        if (entry != g_pendingChunks.end() && entry->GaveUp)
+        {
+            return true;
+        }
+
+        if (!native->texture.hasPendingInitOrStreaming(
+                static_cast<SDK::UStreamableRenderAsset*>(sourceTile.Texture), true))
+        {
+            if (entry != g_pendingChunks.end())
+            {
+                g_pendingChunks.erase(entry);
+            }
+            return false;
+        }
+
+        const auto now = std::chrono::steady_clock::now();
+        if (entry == g_pendingChunks.end())
+        {
+            g_pendingChunks.push_back({identity, now, false});
+        }
+        else if (now - entry->Since >= kPendingGiveUp)
+        {
+            entry->GaveUp = true;
+            LOG_WARN(
+                "MiniMap: terrain: source texture still loading after %d s; "
+                "dropping R%d grid=(%d, %d) chunk=(%d, %d)",
+                static_cast<int>(kPendingGiveUp.count()),
+                identity.RadiationLevel, identity.GridX, identity.GridY,
+                identity.ChunkX, identity.ChunkY);
+        }
+        return true;
+    }
+
+
     MiniMap::Services::Texture AcquireChunkTexture(
         const MiniMapTerrainSource::SourceTile& sourceTile,
         const ChunkIdentity& identity,
         int globalChunkX,
         int globalChunkY)
     {
+        if (SourceTexturePending(sourceTile, identity))
+        {
+            return {};
+        }
+
         ResidentChunk* resident = nullptr;
         {
             std::lock_guard lock(g_renderMutex);
@@ -1550,6 +1627,7 @@ namespace MiniMapTerrain
 
         g_tickRegistered =
             false;
+        g_pendingChunks.clear();
 
         {
             std::lock_guard<std::mutex> lock(

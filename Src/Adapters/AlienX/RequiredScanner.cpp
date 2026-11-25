@@ -17,7 +17,7 @@ namespace MiniMap::Adapters::AlienX
 
     bool RequiredScanner::HasFailures()
     {
-        Failed = Failed || Scanner.HasFailures(&Self);
+        Failed = Failed || (!OptionalMissed && Scanner.HasFailures(&Self));
         return Failed;
     }
 
@@ -46,6 +46,8 @@ namespace MiniMap::Adapters::AlienX
         request.pattern = pattern.c_str();
         if (scan.versionMapKey)
             request.flags |= PLUGIN_SCAN_FLAG_MAP_KEY;
+        if (scan.optional)
+            request.flags |= PLUGIN_SCAN_FLAG_OPTIONAL;
         switch (scan.kind)
         {
         case AddressKind::FunctionEntry: request.kind = PLUGIN_SCAN_FUNCTION_START; break;
@@ -77,6 +79,11 @@ namespace MiniMap::Adapters::AlienX
         const auto address = Scanner.Resolve(&Self, &request);
         if (!address)
         {
+            if (scan.optional)
+            {
+                OptionalMissed = true; // The loader reports it and turns the feature off.
+                return {std::nullopt, {Error::BackendFailure, "optional scan did not resolve"}};
+            }
             Failed = true; // Resolve already recorded the named required failure.
             return {std::nullopt, {Error::BackendFailure, "required scan failed; see loader scan report"}};
         }
