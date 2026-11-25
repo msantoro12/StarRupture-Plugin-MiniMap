@@ -17,7 +17,7 @@ namespace MiniMap::Adapters::AlienX
 
     bool RequiredScanner::HasFailures()
     {
-        Failed = Failed || (!OptionalMissed && Scanner.HasFailures(&Self));
+        Failed = Failed || Scanner.HasFailures(&Self);
         return Failed;
     }
 
@@ -81,7 +81,7 @@ namespace MiniMap::Adapters::AlienX
         {
             if (scan.optional)
             {
-                OptionalMissed = true; // The loader reports it and turns the feature off.
+                // The loader reports it and turns the feature off.
                 return {std::nullopt, {Error::BackendFailure, "optional scan did not resolve"}};
             }
             Failed = true; // Resolve already recorded the named required failure.

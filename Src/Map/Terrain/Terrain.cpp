@@ -684,17 +684,21 @@ namespace
     {
         ChunkIdentity Identity = {};
         std::chrono::steady_clock::time_point Since = {};
+        std::chrono::steady_clock::time_point Last = {};
         bool GaveUp = false;
     };
 
     std::vector<PendingChunk> g_pendingChunks;
 
     constexpr std::chrono::seconds kPendingGiveUp{30};
+    // A chunk not tried for this long (scrolled out of view) starts a new wait.
+    constexpr std::chrono::seconds kPendingStale{5};
 
     // True when this chunk must be skipped this tick. The engine's wait has no
     // timeout and froze the game thread, so a source texture that is not ready
     // is left to finish on later frames and the chunk is retried on the next
-    // reconcile. After kPendingGiveUp the chunk is dropped and logged once.
+    // reconcile. After kPendingGiveUp it is logged once and keeps being checked,
+    // so it is captured as soon as the texture does finish.
     // Without the non-blocking check this is always false (the old blocking
     // wait runs).
     bool SourceTexturePending(
@@ -714,11 +718,6 @@ namespace
         const auto entry = std::find_if(g_pendingChunks.begin(), g_pendingChunks.end(),
             [&](const PendingChunk& pending) { return SameIdentity(pending.Identity, identity); });
 
-        if (entry != g_pendingChunks.end() && entry->GaveUp)
-        {
-            return true;
-        }
-
         if (!native->texture.hasPendingInitOrStreaming(
                 static_cast<SDK::UStreamableRenderAsset*>(sourceTile.Texture), true))
         {
@@ -732,14 +731,23 @@ namespace
         const auto now = std::chrono::steady_clock::now();
         if (entry == g_pendingChunks.end())
         {
-            g_pendingChunks.push_back({identity, now, false});
+            g_pendingChunks.push_back({identity, now, now, false});
+            return true;
         }
-        else if (now - entry->Since >= kPendingGiveUp)
+
+        if (now - entry->Last >= kPendingStale)
+        {
+            entry->Since = now;
+            entry->GaveUp = false;
+        }
+        entry->Last = now;
+
+        if (!entry->GaveUp && now - entry->Since >= kPendingGiveUp)
         {
             entry->GaveUp = true;
             LOG_WARN(
                 "MiniMap: terrain: source texture still loading after %d s; "
-                "dropping R%d grid=(%d, %d) chunk=(%d, %d)",
+                "skipping R%d grid=(%d, %d) chunk=(%d, %d) until it is ready",
                 static_cast<int>(kPendingGiveUp.count()),
                 identity.RadiationLevel, identity.GridX, identity.GridY,
                 identity.ChunkX, identity.ChunkY);
